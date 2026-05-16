@@ -1,0 +1,14 @@
+/* Bingo Card Tracker — Global Styles */
+@use './styles/bingo-theme';
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Segoe UI', 'Roboto', sans-serif;
+  background: linear-gradient(180deg, #f8f6f0 0%, #ede8dc 100%);
+  color: #333;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}

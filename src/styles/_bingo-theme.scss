@@ -1,0 +1,38 @@
+// Bingo Card Tracker — Angular Material Theme (M3)
+// Classic bingo aesthetic: deep reds, golds, crisp whites
+
+@use '@angular/material' as mat;
+
+$bingo-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$red-palette,
+    tertiary: mat.$yellow-palette,
+  ),
+  typography: (
+    plain-family: 'Segoe UI, Roboto, sans-serif',
+  ),
+  density: (
+    scale: 0,
+  ),
+));
+
+html {
+  @include mat.all-component-themes($bingo-theme);
+}
+
+// Bingo-specific custom styles
+:root {
+  --bingo-bg: #f5f0e8;
+  --bingo-card-bg: #ffffff;
+  --bingo-header-bg: #d32f2f;
+  --bingo-header-text: #ffffff;
+  --bingo-cell-border: #cccccc;
+  --bingo-cell-text: #333333;
+  --bingo-marked-bg: #4caf50;
+  --bingo-marked-text: #ffffff;
+  --bingo-winning-bg: #ffd700;
+  --bingo-winning-text: #333333;
+  --bingo-free-bg: #f0f0f0;
+  --bingo-free-text: #999999;
+}
