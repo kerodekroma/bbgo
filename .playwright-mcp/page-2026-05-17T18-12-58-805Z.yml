@@ -1,0 +1,21 @@
+- generic [active] [ref=e1]:
+  - 'heading "ðŸ” OCR Pipeline â€” Card Analysis" [level=1] [ref=e2]'
+  - generic [ref=e3]:
+    - heading "Original" [level=2] [ref=e5]
+    - heading "Adaptive Threshold" [level=2] [ref=e8]
+  - generic [ref=e10]:
+    - heading "ðŸ“Š Statistics" [level=2] [ref=e11]
+    - generic [ref=e13]:
+      - text: "Image: 3000Ã—4000 â†’ 1200Ã—1600 (scale 0.40)"
+      - text: "Dark pixel fraction: 20.5%"
+      - text: "Avg row dark %: 20.50%"
+      - text: "Avg col dark %: 20.50%"
+      - separator [ref=e14]
+      - text: "Projection grid: âœ— Failed"
+      - text: "Content-based grid: âœ— Failed"
+  - generic [ref=e15]:
+    - heading "Horizontal Projection" [level=2] [ref=e17]
+    - heading "Vertical Projection" [level=2] [ref=e20]
+  - generic [ref=e22]:
+    - heading "Grid Overlay (projection)" [level=2] [ref=e24]
+    - heading "Grid Overlay (content-based)" [level=2] [ref=e27]

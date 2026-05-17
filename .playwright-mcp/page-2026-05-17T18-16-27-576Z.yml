@@ -1,0 +1,61 @@
+- generic [active] [ref=e1]:
+  - heading "🔨 OCR Pipeline â€” Parameter Tuning" [level=1] [ref=e2]
+  - generic [ref=e3]:
+    - 'heading "Image: 3000x4000 → 1200x1600" [level=2] [ref=e4]'
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - heading "k=31 o=20 (current)" [level=3] [ref=e7]
+        - generic [ref=e8]: "Dark: 20.5%"
+        - generic [ref=e9]: "Projection: FAIL"
+        - generic [ref=e10]: "Content: FAIL"
+        - img [ref=e13]
+        - img [ref=e16]
+      - generic [ref=e18]:
+        - heading "k=61 o=20" [level=3] [ref=e19]
+        - generic [ref=e20]: "Dark: 25.8%"
+        - generic [ref=e21]: "Projection: FAIL"
+        - generic [ref=e22]: "Content: FAIL"
+        - img [ref=e25]
+        - img [ref=e28]
+      - generic [ref=e30]:
+        - heading "k=91 o=20" [level=3] [ref=e31]
+        - generic [ref=e32]: "Dark: 28.2%"
+        - generic [ref=e33]: "Projection: FAIL"
+        - generic [ref=e34]: "Content: FAIL"
+        - img [ref=e37]
+        - img [ref=e40]
+      - generic [ref=e42]:
+        - heading "k=121 o=20" [level=3] [ref=e43]
+        - generic [ref=e44]: "Dark: 28.8%"
+        - generic [ref=e45]: "Projection: FAIL"
+        - generic [ref=e46]: "Content: FAIL"
+        - img [ref=e49]
+        - img [ref=e52]
+      - generic [ref=e54]:
+        - heading "k=151 o=20" [level=3] [ref=e55]
+        - generic [ref=e56]: "Dark: 29.5%"
+        - generic [ref=e57]: "Projection: FAIL"
+        - generic [ref=e58]: "Content: FAIL"
+        - img [ref=e61]
+        - img [ref=e64]
+      - generic [ref=e66]:
+        - heading "k=61 o=25" [level=3] [ref=e67]
+        - generic [ref=e68]: "Dark: 22.0%"
+        - generic [ref=e69]: "Projection: FAIL"
+        - generic [ref=e70]: "Content: FAIL"
+        - img [ref=e73]
+        - img [ref=e76]
+      - generic [ref=e78]:
+        - heading "k=91 o=25" [level=3] [ref=e79]
+        - generic [ref=e80]: "Dark: 24.2%"
+        - generic [ref=e81]: "Projection: FAIL"
+        - generic [ref=e82]: "Content: FAIL"
+        - img [ref=e85]
+        - img [ref=e88]
+      - generic [ref=e90]:
+        - heading "k=121 o=25" [level=3] [ref=e91]
+        - generic [ref=e92]: "Dark: 24.7%"
+        - generic [ref=e93]: "Projection: FAIL"
+        - generic [ref=e94]: "Content: FAIL"
+        - img [ref=e97]
+        - img [ref=e100]

@@ -120,7 +120,85 @@ function adaptiveThreshold(
 }
 
 /**
- * Load a file into an offscreen canvas, resize, adaptive threshold.
+ * Auto-crop the image to remove dark borders around the card.
+ *
+ * Photos of bingo cards often include dark tabletop/background edges.
+ * These dominate projection profiles and confuse grid detection.
+ *
+ * Scans from each edge inward to find where the image transitions
+ * from a uniform dark border to the card content.
+ * Returns the crop rectangle in image coordinates.
+ */
+function autoCrop(
+  imageData: ImageData,
+  width: number,
+  height: number,
+): { x: number; y: number; w: number; h: number } | null {
+  const data = imageData.data;
+
+  // Row dark fraction: scan rows from top
+  const rowDark = new Float64Array(height);
+  for (let y = 0; y < height; y++) {
+    let dc = 0;
+    for (let x = 0; x < width; x++) if (data[(y * width + x) * 4]! < 80) dc++;
+    rowDark[y] = dc / width;
+  }
+
+  // Find top crop: first row where dark fraction drops below 30%
+  // after being above 60% (i.e., transition from dark border to card)
+  let top = 0;
+  for (let y = 0; y < height; y++) {
+    if (rowDark[y]! < 0.3) {
+      top = Math.max(0, y - 5);
+      break;
+    }
+  }
+
+  // Find bottom crop: scan from bottom
+  let bottom = height;
+  for (let y = height - 1; y >= 0; y--) {
+    if (rowDark[y]! < 0.3) {
+      bottom = Math.min(height, y + 5);
+      break;
+    }
+  }
+
+  // Column dark fraction: scan columns from left/right
+  const colDark = new Float64Array(width);
+  for (let x = 0; x < width; x++) {
+    let dc = 0;
+    for (let y = top; y < bottom; y++) if (data[(y * width + x) * 4]! < 80) dc++;
+    colDark[x] = dc / (bottom - top);
+  }
+
+  // For columns: find where dark fraction exceeds 2%
+  // (inside the card there are numbers; outside is uniform)
+  let left = 0;
+  for (let x = 0; x < width; x++) {
+    if (colDark[x]! > 0.02) {
+      left = Math.max(0, x - 5);
+      break;
+    }
+  }
+  let right = width;
+  for (let x = width - 1; x >= 0; x--) {
+    if (colDark[x]! > 0.02) {
+      right = Math.min(width, x + 5);
+      break;
+    }
+  }
+
+  // Validate: crop must be at least 40% of original dimensions
+  const cropW = right - left;
+  const cropH = bottom - top;
+  if (cropW < width * 0.3 || cropH < height * 0.3) return null;
+  if (cropW < 200 || cropH < 200) return null;
+
+  return { x: left, y: top, w: cropW, h: cropH };
+}
+
+/**
+ * Load a file into an offscreen canvas, resize, auto-crop, adaptive threshold.
  * Returns the binary blob (for OCR), binary ImageData (for grid detection),
  * and binary canvas (for cell extraction).
  */
@@ -130,32 +208,69 @@ function preprocessImage(file: File): Promise<PreprocessedImage> {
     img.onload = () => {
       const maxWidth = 1200;
       const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-      const width = Math.round(img.width * scale);
-      const height = Math.round(img.height * scale);
+      const srcW = Math.round(img.width * scale);
+      const srcH = Math.round(img.height * scale);
 
+      // Step 1: Draw scaled image to get grayscale for auto-crop
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = srcW;
+      tempCanvas.height = srcH;
+      const tempCtx = tempCanvas.getContext('2d')!;
+      tempCtx.drawImage(img, 0, 0, srcW, srcH);
+      let grayData = tempCtx.getImageData(0, 0, srcW, srcH);
+
+      // Grayscale
+      for (let i = 0; i < grayData.data.length; i += 4) {
+        const g = Math.round(
+          grayData.data[i]! * 0.299 +
+          grayData.data[i + 1]! * 0.587 +
+          grayData.data[i + 2]! * 0.114,
+        );
+        grayData.data[i] = g;
+        grayData.data[i + 1] = g;
+        grayData.data[i + 2] = g;
+      }
+
+      // Step 2: Auto-crop to strip dark borders
+      const crop = autoCrop(grayData, srcW, srcH);
+      const cx = crop?.x ?? 0;
+      const cy = crop?.y ?? 0;
+      const cw = crop?.w ?? srcW;
+      const ch = crop?.h ?? srcH;
+
+      // Step 3: Create final canvas with cropped content
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = cw;
+      canvas.height = ch;
       const ctx = canvas.getContext('2d')!;
+      // Draw only the cropped region from the original image
+      ctx.drawImage(img, cx / scale, cy / scale, cw / scale, ch / scale, 0, 0, cw, ch);
 
-      // Draw scaled image
-      ctx.drawImage(img, 0, 0, width, height);
+      // Step 4: Grayscale + adaptive threshold on cropped image
+      grayData = ctx.getImageData(0, 0, cw, ch);
+      for (let i = 0; i < grayData.data.length; i += 4) {
+        const g = Math.round(
+          grayData.data[i]! * 0.299 +
+          grayData.data[i + 1]! * 0.587 +
+          grayData.data[i + 2]! * 0.114,
+        );
+        grayData.data[i] = g;
+        grayData.data[i + 1] = g;
+        grayData.data[i + 2] = g;
+      }
 
-      // Get grayscale ImageData
-      const grayData = ctx.getImageData(0, 0, width, height);
+      // Apply adaptive threshold — kernel proportional to image size
+      const kernelSize = Math.max(15, Math.round(Math.min(cw, ch) / 25));
+      const offset = 20;
+      const binaryData = adaptiveThreshold(grayData, cw, ch, kernelSize, offset);
 
-      // Apply adaptive threshold — handles glossy reflections
-      // Kernel ~1/40th of the image width (i.e. ~30px at 1200px),
-      // offset 20 means pixel must be 20+ shades darker than local mean
-      const binaryData = adaptiveThreshold(grayData, width, height, 31, 20);
-
-      // Write binary back to canvas (used for cell extraction + blob)
+      // Write binary back to canvas
       ctx.putImageData(binaryData, 0, 0);
 
       canvas.toBlob(
         blob => {
           if (blob) {
-            resolve({ blob, imageData: binaryData, canvas, width, height });
+            resolve({ blob, imageData: binaryData, canvas, width: cw, height: ch });
           } else {
             reject(new Error('Canvas toBlob failed'));
           }
@@ -366,12 +481,13 @@ function detectGridFromContent(
     rowProfile[y] = darkCount;
   }
 
-  // Smooth profile with a 5-wide box filter
+  // Smooth profile with a box filter proportional to image size.
+  const rowSmoothRadius = Math.max(5, Math.round(height / 50));
   const smoothedR = new Float64Array(height);
   for (let y = 0; y < height; y++) {
     let sum = 0;
     let count = 0;
-    for (let dy = -2; dy <= 2; dy++) {
+    for (let dy = -rowSmoothRadius; dy <= rowSmoothRadius; dy++) {
       const yy = y + dy;
       if (yy >= 0 && yy < height) {
         sum += rowProfile[yy]!;
@@ -381,8 +497,36 @@ function detectGridFromContent(
     smoothedR[y] = sum / count;
   }
 
+  // Mask outer margins so minima detection only searches the card body.
+  // Cards often have header (BINGO), footer text, or borders that create
+  // extra peaks — restricting to the central ~70% avoids these.
+  const searchMargin = Math.round(height * 0.15);
+  for (let y = 0; y < searchMargin; y++) smoothedR[y] = 1;
+  for (let y = height - searchMargin; y < height; y++) smoothedR[y] = 1;
+
   // Find row band boundaries via local minima (gaps between number rows)
-  const rowBands = findPeakBoundaries(smoothedR, 5, height);
+  // We search for 6 bands (BINGO header + 5 number rows), then merge
+  // the smallest band into an adjacent one to get exactly 5 number rows.
+  const rowBands6 = findPeakBoundaries(smoothedR, 6, height);
+  if (!rowBands6 || rowBands6.length !== 7) return null;
+
+  // Merge the two most closely-spaced consecutive bands.
+  // The BINGO header is typically the thinnest band, so merging it
+  // with the first number row gives us the 5 number rows we need.
+  let minGap = Infinity;
+  let mergeIdx = -1;
+  for (let i = 1; i < rowBands6.length; i++) {
+    const gap = rowBands6[i]! - rowBands6[i - 1]!;
+    if (gap < minGap) {
+      minGap = gap;
+      mergeIdx = i;
+    }
+  }
+  if (mergeIdx < 0) return null;
+
+  // Remove the boundary at mergeIdx to merge the two adjacent bands
+  const rowBands = rowBands6.filter((_, i) => i !== mergeIdx);
+  if (rowBands.length !== 6) return null;
   if (!rowBands || rowBands.length !== 6) return null;
 
   // ── Vertical projection per row band ──
@@ -402,12 +546,13 @@ function detectGridFromContent(
       }
     }
 
-    // Smooth col profile
+    // Smooth col profile — use proportional radius
+    const colSmoothRadius = Math.max(5, Math.round(width / 60));
     const smoothedC = new Float64Array(width);
     for (let x = 0; x < width; x++) {
       let sum = 0;
       let count = 0;
-      for (let dx = -2; dx <= 2; dx++) {
+      for (let dx = -colSmoothRadius; dx <= colSmoothRadius; dx++) {
         const xx = x + dx;
         if (xx >= 0 && xx < width) {
           sum += colProfile[xx]!;
@@ -445,6 +590,10 @@ function detectGridFromContent(
  * Strategy: find the deepest local minima (valleys) to separate
  * the peaks. Returns numPeaks+1 boundary positions, or null if
  * the profile doesn't have enough structure.
+ *
+ * The minima detection window is proportional to imageDim so it
+ * works at any scale — small windows create noise from intra-row
+ * pixel variations.
  */
 function findPeakBoundaries(
   profile: Float64Array,
@@ -455,18 +604,28 @@ function findPeakBoundaries(
   const minSepar = Math.round(expectedGap * 0.3);
   const maxSepar = Math.round(expectedGap * 2.5);
 
+  // Detection radius proportional to image dimension
+  // (~1/50th of total height/width ensures we only find
+  // meaningful inter-row/inter-column gaps)
+  const detectRadius = Math.max(3, Math.round(imageDim / 60));
+
   // Find all local minima
   const minima: Array<{ pos: number; depth: number }> = [];
-  for (let i = 2; i < profile.length - 2; i++) {
-    if (
-      profile[i]! <= profile[i - 1]! &&
-      profile[i]! <= profile[i - 2]! &&
-      profile[i]! <= profile[i + 1]! &&
-      profile[i]! <= profile[i + 2]!
-    ) {
+  for (let i = detectRadius; i < profile.length - detectRadius; i++) {
+    let isMin = true;
+    for (let d = 1; d <= detectRadius; d++) {
+      if (
+        profile[i]! > profile[i - d]! ||
+        profile[i]! > profile[i + d]!
+      ) {
+        isMin = false;
+        break;
+      }
+    }
+    if (isMin) {
       // Depth = how much lower this is than the surrounding peaks
-      const leftMax = Math.max(profile[i - 2]!, profile[i - 1]!);
-      const rightMax = Math.max(profile[i + 1]!, profile[i + 2]!);
+      const leftMax = Math.max(...Array.from({ length: detectRadius }, (_, k) => profile[i - 1 - k]!));
+      const rightMax = Math.max(...Array.from({ length: detectRadius }, (_, k) => profile[i + 1 + k]!));
       const depth = Math.min(leftMax, rightMax) - profile[i]!;
       if (depth > 0) {
         minima.push({ pos: i, depth });

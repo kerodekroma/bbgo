@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html><head><title>OCR Pipeline — Parameter Tuning</title>
+<style>
+  body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 20px; max-width: 1600px; margin: 0 auto; }
+  h1 { color: #ffd700; }
+  h2 { color: #89c2ff; margin-top: 30px; }
+  canvas { border: 2px solid #444; margin: 4px; image-rendering: pixelated; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+  .test-card { background: #16213e; border: 1px solid #333; border-radius: 8px; padding: 12px; margin: 8px; flex: 1; min-width: 280px; max-width: 420px; }
+  .test-card h3 { margin: 0 0 8px 0; color: #ffd700; font-size: 14px; }
+  .proj-svg { width: 100%; height: 80px; background: #0d1117; display: block; border-radius: 4px; margin-top: 4px; }
+  .thumb-canvas { width: 100%; height: auto; border-radius: 4px; }
+  .pass { color: #4ade80; font-weight: bold; }
+  .fail { color: #f87171; font-weight: bold; }
+</style></head><body>
+<h1>&#128296; OCR Pipeline — Parameter Tuning</h1>
+<div id="results">Loading card photo and testing 8 adaptive threshold configurations…</div>
+
+<script>
+const CONFIGS = [
+  { k: 31, o: 20, label: 'k=31 o=20 (current)' },
+  { k: 61, o: 20, label: 'k=61 o=20' },
+  { k: 91, o: 20, label: 'k=91 o=20' },
+  { k: 121, o: 20, label: 'k=121 o=20' },
+  { k: 151, o: 20, label: 'k=151 o=20' },
+  { k: 61, o: 25, label: 'k=61 o=25' },
+  { k: 91, o: 25, label: 'k=91 o=25' },
+  { k: 121, o: 25, label: 'k=121 o=25' },
+];
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function getGrayData(ctx, w, h) {
+  const d = ctx.getImageData(0, 0, w, h);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const gray = Math.round(px[i] * 0.299 + px[i+1] * 0.587 + px[i+2] * 0.114);
+    px[i] = gray; px[i+1] = gray; px[i+2] = gray;
+  }
+  return d;
+}
+
+function adaptiveThreshold(imageData, w, h, kSize, offset) {
+  const data = imageData.data;
+  const integral = new Float64Array((w + 1) * (h + 1));
+  for (let y = 1; y <= h; y++) {
+    const rP = (y - 1) * (w + 1);
+    const rC = y * (w + 1);
+    for (let x = 1, pb = (y - 1) * w; x <= w; x++) {
+      const pi = (pb + x - 1) * 4;
+      integral[rC + x] = data[pi] + integral[rC + x - 1] + integral[rP + x] - integral[rP + x - 1];
+    }
+  }
+  const halfK = Math.floor(kSize / 2);
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < h; y++) {
+    const y1 = Math.max(0, y - halfK);
+    const y2 = Math.min(h - 1, y + halfK);
+    const rH = y2 - y1 + 1;
+    for (let x = 0; x < w; x++) {
+      const x1 = Math.max(0, x - halfK);
+      const x2 = Math.min(w - 1, x + halfK);
+      const area = rH * (x2 - x1 + 1);
+      const sum = integral[(y2 + 1) * (w + 1) + (x2 + 1)] - integral[y1 * (w + 1) + (x2 + 1)] - integral[(y2 + 1) * (w + 1) + x1] + integral[y1 * (w + 1) + x1];
+      const pi = (y * w + x) * 4;
+      const result = data[pi] < sum / area - offset ? 0 : 255;
+      out[pi] = result; out[pi+1] = result; out[pi+2] = result; out[pi+3] = 255;
+    }
+  }
+  return new ImageData(out, w, h);
+}
+
+function rowProfile(data, w, h) {
+  const rp = new Float64Array(h);
+  for (let y = 0; y < h; y++) {
+    let dc = 0;
+    for (let x = 0; x < w; x++) if (data[(y*w+x)*4] < 100) dc++;
+    rp[y] = dc / w;
+  }
+  return rp;
+}
+
+function colProfile(data, w, h) {
+  const cp = new Float64Array(w);
+  for (let x = 0; x < w; x++) {
+    let dc = 0;
+    for (let y = 0; y < h; y++) if (data[(y*w+x)*4] < 100) dc++;
+    cp[x] = dc / h;
+  }
+  return cp;
+}
+
+function extractLines(profile, dim) {
+  const minSp = Math.max(3, Math.round(dim * 0.03));
+  for (let thr = 0.25; thr >= 0.10; thr -= 0.02) {
+    const clusters = [];
+    let inLine = false, start = 0, peakVal = 0, peakPos = 0;
+    for (let i = 0; i < profile.length; i++) {
+      if (profile[i] > thr) {
+        if (!inLine) { inLine = true; start = i; peakVal = profile[i]; peakPos = i; }
+        else if (profile[i] > peakVal) { peakVal = profile[i]; peakPos = i; }
+      } else {
+        if (inLine) { if (i - start >= 1) clusters.push({ peak: peakPos, strength: peakVal }); inLine = false; }
+      }
+    }
+    if (inLine) clusters.push({ peak: peakPos, strength: peakVal });
+    if (clusters.length < 6) continue;
+    clusters.sort((a, b) => b.strength - a.strength);
+    const top = clusters.slice(0, 6);
+    top.sort((a, b) => a.peak - b.peak);
+    const merged = [top[0].peak];
+    for (let i = 1; i < top.length; i++) {
+      if (top[i].peak - merged[merged.length - 1] < minSp)
+        merged[merged.length - 1] = Math.round((merged[merged.length - 1] + top[i].peak) / 2);
+      else merged.push(top[i].peak);
+    }
+    if (merged.length === 6) return merged;
+  }
+  return null;
+}
+
+function validateGrid(lines, dim) {
+  if (!lines || lines.length < 2) return false;
+  const gaps = [];
+  for (let i = 1; i < lines.length; i++) gaps.push(lines[i] - lines[i - 1]);
+  const minG = Math.min(...gaps), maxG = Math.max(...gaps);
+  if (minG <= 0 || maxG / minG > 2.5) return false;
+  const expG = dim / 5;
+  for (const g of gaps) if (g < expG * 0.2 || g > expG * 3) return false;
+  return true;
+}
+
+function detectGridLines(data, w, h) {
+  const rp = rowProfile(data, w, h);
+  const cp = colProfile(data, w, h);
+  const rows = extractLines(rp, h);
+  const cols = extractLines(cp, w);
+  if (!rows || !cols || rows.length !== 6 || cols.length !== 6) return null;
+  if (!validateGrid(rows, h) || !validateGrid(cols, w)) return null;
+  return { rows, cols };
+}
+
+function findPeakBoundaries(profile, numPeaks, imageDim) {
+  const expectedGap = imageDim / numPeaks;
+  const minSep = Math.round(expectedGap * 0.3);
+  const maxSep = Math.round(expectedGap * 2.5);
+  const minima = [];
+  for (let i = 3; i < profile.length - 3; i++) {
+    if (profile[i] <= profile[i-1] && profile[i] <= profile[i-2] && profile[i] <= profile[i-3] &&
+        profile[i] <= profile[i+1] && profile[i] <= profile[i+2] && profile[i] <= profile[i+3]) {
+      const leftMax = Math.max(profile[i-3], profile[i-2], profile[i-1]);
+      const rightMax = Math.max(profile[i+1], profile[i+2], profile[i+3]);
+      const depth = Math.min(leftMax, rightMax) - profile[i];
+      if (depth > 0) minima.push({ pos: i, depth });
+    }
+  }
+  if (minima.length < numPeaks - 1) return null;
+  minima.sort((a, b) => b.depth - a.depth);
+  const selected = minima.slice(0, numPeaks - 1);
+  selected.sort((a, b) => a.pos - b.pos);
+  for (let i = 1; i < selected.length; i++) {
+    const gap = selected[i].pos - selected[i - 1].pos;
+    if (gap < minSep || gap > maxSep) return null;
+  }
+  const boundaries = [0];
+  for (const m of selected) boundaries.push(m.pos);
+  boundaries.push(imageDim);
+  return boundaries;
+}
+
+function detectGridFromContent(data, w, h) {
+  const rp = new Uint32Array(h);
+  for (let y = 0; y < h; y++) {
+    let dc = 0;
+    for (let x = 0; x < w; x++) if (data[(y*w+x)*4] < 50) dc++;
+    rp[y] = dc;
+  }
+  const smoothR = new Float64Array(h);
+  for (let y = 0; y < h; y++) {
+    let s = 0, c = 0;
+    for (let dy = -5; dy <= 5; dy++) { const yy = y + dy; if (yy >= 0 && yy < h) { s += rp[yy]; c++; } }
+    smoothR[y] = s / c;
+  }
+  const rowBands = findPeakBoundaries(smoothR, 5, h);
+  if (!rowBands || rowBands.length !== 6) return null;
+  const allColGaps = [[], [], [], []];
+  for (let ri = 0; ri < 5; ri++) {
+    const yT = rowBands[ri], yB = rowBands[ri + 1];
+    if (yB - yT < 5) continue;
+    const cp = new Uint32Array(w);
+    for (let y = yT; y < yB; y++) for (let x = 0; x < w; x++) if (data[(y*w+x)*4] < 50) cp[x]++;
+    const smoothC = new Float64Array(w);
+    for (let x = 0; x < w; x++) {
+      let s = 0, c = 0;
+      for (let dx = -5; dx <= 5; dx++) { const xx = x + dx; if (xx >= 0 && xx < w) { s += cp[xx]; c++; } }
+      smoothC[x] = s / c;
+    }
+    const colBands = findPeakBoundaries(smoothC, 5, w);
+    if (!colBands || colBands.length !== 6) continue;
+    for (let ci = 0; ci < 4; ci++) allColGaps[ci].push(colBands[ci + 1]);
+  }
+  const avgGaps = [];
+  for (const gaps of allColGaps) {
+    if (gaps.length < 2) return null;
+    avgGaps.push(Math.round(gaps.reduce((s, v) => s + v, 0) / gaps.length));
+  }
+  return { rows: rowBands, cols: [0, ...avgGaps, w] };
+}
+
+function drawProjSvg(profile, width, height, containerId) {
+  const maxVal = Math.max(...profile, 1);
+  const svgW = width, svgH = height;
+  let pointsRow = '';
+  for (let i = 0; i < profile.length; i += 2) {
+    const norm = profile[i] / maxVal;
+    pointsRow += i + ',' + (svgH - 5 - norm * (svgH - 10)) + ' ';
+  }
+  document.getElementById(containerId).innerHTML = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="proj-svg">' +
+    '<polyline fill="none" stroke="#ffd700" stroke-width="1.5" points="' + pointsRow + '"/>' +
+    '<line x1="0" y1="' + (svgH - 5 - 0.25 * (svgH - 10)) + '" x2="' + svgW + '" y2="' + (svgH - 5 - 0.25 * (svgH - 10)) + '" stroke="#f87171" stroke-dasharray="4,4" stroke-width="1"/>' +
+    '</svg>';
+}
+
+(async () => {
+  const img = await loadImage('card-photo.jpg');
+  const maxW = 1200, scale = (img.width > maxW ? maxW / img.width : 1);
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+
+  const resultsDiv = document.getElementById('results');
+  let html = '<h2>Image: ' + img.width + 'x' + img.height + ' &#8594; ' + w + 'x' + h + '</h2><div class="row">';
+
+  for (const cfg of CONFIGS) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const gray = getGrayData(ctx, w, h);
+    const binary = adaptiveThreshold(gray, w, h, cfg.k, cfg.o);
+    ctx.putImageData(binary, 0, 0);
+
+    const rp = rowProfile(binary.data, w, h);
+    const cp = colProfile(binary.data, w, h);
+    const darkPx = binary.data.filter(function(v, i) { return i % 4 === 0 && v < 100; }).length;
+    const darkFrac = (darkPx / (w * h) * 100).toFixed(1);
+    const gridProj = detectGridLines(binary.data, w, h);
+    const gridContent = detectGridFromContent(binary.data, w, h);
+
+    const sf = 0.3;
+    const tC = document.createElement('canvas');
+    tC.width = Math.round(w * sf); tC.height = Math.round(h * sf);
+    const tx = tC.getContext('2d');
+    tx.drawImage(img, 0, 0, tC.width, tC.height);
+    tx.globalAlpha = 0.5; tx.drawImage(c, 0, 0, tC.width, tC.height); tx.globalAlpha = 1;
+    const grid = gridProj || gridContent;
+    if (grid) {
+      tx.strokeStyle = '#00ff88'; tx.lineWidth = 2;
+      for (const r of grid.rows) { tx.beginPath(); tx.moveTo(0, r * sf); tx.lineTo(tC.width, r * sf); tx.stroke(); }
+      for (const col of grid.cols) { tx.beginPath(); tx.moveTo(col * sf, 0); tx.lineTo(col * sf, tC.height); tx.stroke(); }
+    }
+
+    const uid = 'cfg' + cfg.k + 'o' + cfg.o;
+    html += '<div class="test-card">' +
+      '<h3>' + cfg.label + '</h3>' +
+      '<div style="font-size:12px">Dark: <b>' + darkFrac + '%</b></div>' +
+      '<div style="font-size:12px">Projection: ' + (gridProj ? '<span class="pass">OK</span>' : '<span class="fail">FAIL</span>') + '</div>' +
+      '<div style="font-size:12px">Content: ' + (gridContent ? '<span class="pass">OK</span>' : '<span class="fail">FAIL</span>') + '</div>' +
+      '<canvas class="thumb-canvas" id="' + uid + 'canv"></canvas>' +
+      '<div id="' + uid + 'row"></div>' +
+      '<div id="' + uid + 'col"></div></div>';
+  }
+
+  html += '</div>';
+  resultsDiv.innerHTML = html;
+
+  // Render canvases and SVGs
+  for (let ci = 0; ci < CONFIGS.length; ci++) {
+    const cfg = CONFIGS[ci];
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const gray = getGrayData(ctx, w, h);
+    const binary = adaptiveThreshold(gray, w, h, cfg.k, cfg.o);
+    ctx.putImageData(binary, 0, 0);
+
+    const rp = rowProfile(binary.data, w, h);
+    const cp = colProfile(binary.data, w, h);
+    const gridProj = detectGridLines(binary.data, w, h);
+    const gridContent = detectGridFromContent(binary.data, w, h);
+
+    const sf = 0.3;
+    const can = document.getElementById('cfg' + cfg.k + 'o' + cfg.o + 'canv');
+    if (can) {
+      can.width = Math.round(w * sf);
+      can.height = Math.round(h * sf);
+      const cx = can.getContext('2d');
+      cx.drawImage(img, 0, 0, can.width, can.height);
+      cx.globalAlpha = 0.5; cx.drawImage(c, 0, 0, can.width, can.height); cx.globalAlpha = 1;
+      const grid = gridProj || gridContent;
+      if (grid) {
+        cx.strokeStyle = '#00ff88'; cx.lineWidth = 2;
+        for (const r of grid.rows) { cx.beginPath(); cx.moveTo(0, r * sf); cx.lineTo(can.width, r * sf); cx.stroke(); }
+        for (const col of grid.cols) { cx.beginPath(); cx.moveTo(col * sf, 0); cx.lineTo(col * sf, can.height); cx.stroke(); }
+      }
+    }
+    drawProjSvg(rp, 400, 80, 'cfg' + cfg.k + 'o' + cfg.o + 'row');
+    drawProjSvg(cp, 400, 80, 'cfg' + cfg.k + 'o' + cfg.o + 'col');
+  }
+})();
+</script>
+</body></html>
