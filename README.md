@@ -42,7 +42,7 @@ Each card's tab shows progress toward the best-matching enabled pattern — so y
 Visual 5×15 grid of all numbers 1–75. Called numbers are highlighted. Tap any number to call or void it.
 
 ### OCR Import
-Snap a photo of a physical bingo card and the app will extract the numbers using [Tesseract.js](https://github.com/naptha/tesseract.js/). Review and confirm before adding.
+Snap a photo of a physical bingo card and the app extracts the numbers using [Tesseract.js](https://github.com/naptha/tesseract.js/). Low-confidence cells are flagged in orange for you to review and correct before adding the card.
 
 ## Tech Stack
 
