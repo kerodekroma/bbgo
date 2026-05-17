@@ -6,4 +6,5 @@ export interface CardRepository {
   findById(id: CardId): Promise<BingoCard | null>;
   save(card: BingoCard): Promise<void>;
   delete(id: CardId): Promise<void>;
+  clearAll(): Promise<void>;
 }

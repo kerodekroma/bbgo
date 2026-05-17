@@ -27,4 +27,8 @@ export class CardRepositoryImpl implements CardRepository {
   async delete(id: CardId): Promise<void> {
     this.storage.delete(id);
   }
+
+  async clearAll(): Promise<void> {
+    this.storage.clearAll();
+  }
 }
