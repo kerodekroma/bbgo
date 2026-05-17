@@ -36,8 +36,10 @@ jobs:
       - name: Build
         run: pnpm ng build --base-href /${{ github.event.repository.name }}/
 
-      - name: Add 404.html for SPA routing
-        run: cp dist/bbgo/browser/index.html dist/bbgo/browser/404.html
+      - name: Add .nojekyll and 404.html for SPA routing
+        run: |
+          cp dist/bbgo/browser/index.html dist/bbgo/browser/404.html
+          touch dist/bbgo/browser/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
