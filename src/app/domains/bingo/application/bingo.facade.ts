@@ -1,4 +1,4 @@
-import { Injectable, inject, signal, computed, effect } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import type { CardId } from '../domain/card-id.vo';
 import { createCardId } from '../domain/card-id.vo';
 import type { BingoCard } from '../domain/bingo-card.entity';
@@ -31,6 +31,7 @@ export class BingoFacade {
   private readonly loadingSignal = signal(false);
   private readonly errorSignal = signal<string | null>(null);
   private readonly patternSettingsSignal = signal<PatternSettings>(DEFAULT_PATTERN_SETTINGS);
+  private readonly _dirtySignal = signal(false);
 
   // --- Public Readonly Signals ---
   readonly cards = this.cardsSignal.asReadonly();
@@ -40,6 +41,7 @@ export class BingoFacade {
   readonly loading = this.loadingSignal.asReadonly();
   readonly error = this.errorSignal.asReadonly();
   readonly patternSettings = this.patternSettingsSignal.asReadonly();
+  readonly dirty = this._dirtySignal.asReadonly();
 
   /** The currently active card (or null if none selected) */
   readonly activeCard = computed(() => {
@@ -77,22 +79,6 @@ export class BingoFacade {
     return this.calledNumbersSignal().slice(-15).reverse();
   });
 
-  constructor() {
-    // Auto-save cards on every change
-    effect(() => {
-      const currentCards = this.cardsSignal();
-      this.saveCards(currentCards);
-    });
-
-    // Auto-save game state on every change
-    effect(() => {
-      const numbers = this.calledNumbersSignal();
-      const mode = this.gameModeSignal();
-      const settings = this.patternSettingsSignal();
-      this.saveGameState(numbers, mode, settings);
-    });
-  }
-
   // --- Actions ---
 
   /** Load all persisted data on app startup */
@@ -117,17 +103,25 @@ export class BingoFacade {
       if (cards.length > 0 && !this.activeCardIdSignal()) {
         this.activeCardIdSignal.set(cards[0]!.id);
       }
-
-      // First launch — create a demo card so the app isn't empty
-      if (cards.length === 0) {
-        this.createDemoCard();
-      }
     } catch (e) {
       this.errorSignal.set('Failed to load data from storage');
       console.error(e);
     } finally {
       this.loadingSignal.set(false);
     }
+  }
+
+  /** Save current session to localStorage — cards, called numbers, game mode, and settings */
+  saveSession(): void {
+    // Clear all existing data then persist current state atomically
+    this.repository.clearAll();
+    this.saveCards(this.cardsSignal());
+    this.saveGameState(
+      this.calledNumbersSignal(),
+      this.gameModeSignal(),
+      this.patternSettingsSignal(),
+    );
+    this._dirtySignal.set(false);
   }
 
   /** Add a new card with manual grid entry */
@@ -140,6 +134,7 @@ export class BingoFacade {
 
     this.cardsSignal.update(cards => [...cards, result.value]);
     this.activeCardIdSignal.set(id);
+    this.markDirty();
     return { ok: true, value: id };
   }
 
@@ -164,14 +159,21 @@ export class BingoFacade {
 
   /** Delete a card by ID */
   async deleteCard(id: CardId): Promise<void> {
-    await this.repository.delete(id);
     this.cardsSignal.update(cards => cards.filter(c => c.id !== id));
+    this.markDirty();
 
     // If deleted the active card, switch to first remaining
     if (this.activeCardIdSignal() === id) {
       const remaining = this.cardsSignal();
       this.activeCardIdSignal.set(remaining.length > 0 ? remaining[0]!.id : null);
     }
+  }
+
+  /** Delete all cards */
+  deleteAllCards(): void {
+    this.cardsSignal.set([]);
+    this.activeCardIdSignal.set(null);
+    this.markDirty();
   }
 
   /** Call a number (caller mode) */
@@ -207,6 +209,7 @@ export class BingoFacade {
     );
 
     this.errorSignal.set(null);
+    this.markDirty();
   }
 
   /** Void a previously called number — removes from history and unmarks cells */
@@ -226,6 +229,7 @@ export class BingoFacade {
     );
 
     this.errorSignal.set(null);
+    this.markDirty();
   }
 
   /** Toggle a cell on a specific card (card-only mode) */
@@ -238,16 +242,19 @@ export class BingoFacade {
         return card;
       }),
     );
+    this.markDirty();
   }
 
   /** Set game mode */
   setGameMode(mode: GameMode): void {
     this.gameModeSignal.set(mode);
+    this.markDirty();
   }
 
   /** Update pattern settings — which win patterns are checked */
   setPatternSettings(settings: PatternSettings): void {
     this.patternSettingsSignal.set(settings);
+    this.markDirty();
   }
 
   /** Select active card */
@@ -263,6 +270,7 @@ export class BingoFacade {
         return card;
       }),
     );
+    this.markDirty();
   }
 
   /** Change a number on a card (edit mode) */
@@ -273,6 +281,7 @@ export class BingoFacade {
         return card;
       }),
     );
+    this.markDirty();
   }
 
   /** Rename a card */
@@ -283,6 +292,7 @@ export class BingoFacade {
         return card;
       }),
     );
+    this.markDirty();
   }
 
   /** Reset game state — clears marks + called numbers, keeps cards */
@@ -293,6 +303,7 @@ export class BingoFacade {
     });
     this.calledNumbersSignal.set([]);
     this.errorSignal.set(null);
+    this.markDirty();
   }
 
   /** Clear error message */
@@ -325,37 +336,7 @@ export class BingoFacade {
     });
   }
 
-  /** Create a demo card on first launch so the app isn't empty */
-  private createDemoCard(): void {
-    // A realistic 5×5 grid with numbers in correct column ranges
-    const demoGrid: number[][] = [
-      [3, 19, 35, 52, 68],  // Row 0
-      [8, 24, 41, 47, 73],  // Row 1
-      [12, 28, 0, 58, 65],  // Row 2 (0 = FREE center)
-      [5, 17, 33, 55, 71],  // Row 3
-      [14, 22, 39, 60, 69], // Row 4
-    ];
-
-    const result = BingoCardEntity.create(createCardId('demo-card'), 'DEMO', demoGrid);
-    if (!result.ok) {
-      console.error('Failed to create demo card:', result.error);
-      return;
-    }
-
-    const card = result.value;
-    // Pre-mark cells by position (corners + a few extras for visual variety)
-    // FREE (2,2) is always marked. Mark: (0,0), (0,4), (4,0), (4,4), (1,1), (2,3), (3,2)
-    card.toggleCell(0, 0);
-    card.toggleCell(0, 4);
-    card.toggleCell(4, 0);
-    card.toggleCell(4, 4);
-    card.toggleCell(1, 1);
-    card.toggleCell(2, 3);
-    card.toggleCell(3, 2);
-
-    this.cardsSignal.set([card]);
-    this.activeCardIdSignal.set(card.id);
-    // Pre-save the demo card
-    this.repository.save(card);
+  private markDirty(): void {
+    this._dirtySignal.set(true);
   }
 }
