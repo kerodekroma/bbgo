@@ -99,9 +99,22 @@ export class BingoFacade {
         }
       }
 
+      // Auto-create demo card on first launch (no saved data)
+      if (cards.length === 0) {
+        const demoGrid = BingoCardEntity.generateRandomGrid();
+        const code = generateCardCode();
+        const id = createCardId(crypto.randomUUID());
+        const result = BingoCardEntity.create(id, code, demoGrid);
+        if (result.ok) {
+          this.cardsSignal.set([result.value]);
+          this.activeCardIdSignal.set(id);
+          this.saveSession(); // persist so it survives reload
+        }
+      }
+
       // Auto-select first card if none active
-      if (cards.length > 0 && !this.activeCardIdSignal()) {
-        this.activeCardIdSignal.set(cards[0]!.id);
+      if (this.cardsSignal().length > 0 && !this.activeCardIdSignal()) {
+        this.activeCardIdSignal.set(this.cardsSignal()[0]!.id);
       }
     } catch (e) {
       this.errorSignal.set('Failed to load data from storage');

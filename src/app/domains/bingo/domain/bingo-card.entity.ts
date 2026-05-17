@@ -31,6 +31,27 @@ export class BingoCard {
     return this._grid;
   }
 
+  /** Generate a valid random 5×5 bingo card grid (for demo card on first launch) */
+  static generateRandomGrid(): number[][] {
+    const grid: number[][] = Array.from({ length: 5 }, () => [0, 0, 0, 0, 0]);
+    for (let col = 0; col < 5; col++) {
+      const column = COLUMNS[col]!;
+      const range = COLUMN_RANGES[column];
+      const pool = Array.from({ length: range.max - range.min + 1 }, (_, i) => range.min + i);
+      // Fisher-Yates shuffle
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+      }
+      const selected = pool.slice(0, 5);
+      for (let row = 0; row < 5; row++) {
+        grid[row]![col] = selected[row]!;
+      }
+    }
+    grid[2]![2] = 0; // FREE center
+    return grid;
+  }
+
   /** Static factory — validates all numbers belong to correct columns */
   static create(
     id: CardId,

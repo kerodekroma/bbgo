@@ -103,7 +103,7 @@ src/app/domains/bingo/
 - [x] **Edit mode** — toggle per card to edit individual cell numbers via inputs
   - Validates column ranges (B:1-15, I:16-30, etc.)
   - Commits on blur or Enter, reverts on Escape
-- [x] **No demo card** — app starts completely empty on first launch
+- [x] **Demo card on first launch** — app auto-creates a random valid card when localStorage is empty
 
 ### Session Management
 - [x] **Manual save** — "Save Session" button in header (only active when dirty)
