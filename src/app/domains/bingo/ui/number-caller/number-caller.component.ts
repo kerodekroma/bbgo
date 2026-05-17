@@ -1,10 +1,11 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import type { GameMode } from '../../domain/game-mode.type';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 
 @Component({
   selector: 'app-number-caller',
@@ -26,7 +27,7 @@ import type { GameMode } from '../../domain/game-mode.type';
               type="number"
               min="1"
               max="75"
-              placeholder="Enter called number…"
+              [placeholder]="t()('caller.placeholder')"
               [(ngModel)]="inputValue"
               (keydown.enter)="onCall()"
               [disabled]="gameMode() !== 'caller'"
@@ -36,7 +37,7 @@ import type { GameMode } from '../../domain/game-mode.type';
               matSuffix
               (click)="onCall()"
               [disabled]="gameMode() !== 'caller'"
-              aria-label="Call number"
+              [attr.aria-label]="t()('caller.callNumber')"
             >
               <mat-icon>play_arrow</mat-icon>
             </button>
@@ -50,26 +51,26 @@ import type { GameMode } from '../../domain/game-mode.type';
           <mat-slide-toggle
             [checked]="gameMode() === 'caller'"
             (toggleChange)="onToggleMode()"
-            [aria-label]="gameMode() === 'caller' ? 'Switch to card-only mode' : 'Switch to caller mode'"
+            [attr.aria-label]="gameMode() === 'caller' ? t()('caller.switchToCardOnly') : t()('caller.switchToCaller')"
           >
-            {{ gameMode() === 'caller' ? 'Caller Mode' : 'Card-Only Mode' }}
+            {{ gameMode() === 'caller' ? t()('caller.mode') : t()('caller.cardOnly') }}
           </mat-slide-toggle>
 
           <button
             mat-stroked-button
             color="warn"
             (click)="onReset()"
-            aria-label="Reset game"
+            [attr.aria-label]="t()('caller.resetGame')"
           >
             <mat-icon>refresh</mat-icon>
-            Reset
+            {{ t()('caller.reset') }}
           </button>
         </div>
       </div>
 
       @if (recentCalledNumbers().length > 0) {
         <div class="called-history">
-          <span class="history-label">Recent calls:</span>
+          <span class="history-label">{{ t()('caller.recentCalls') }}</span>
           <div class="history-numbers">
             @for (num of recentCalledNumbers(); track $index) {
               <div class="called-chip" role="listitem">
@@ -77,7 +78,7 @@ import type { GameMode } from '../../domain/game-mode.type';
                 <button
                   class="chip-undo"
                   (click)="onVoid(num)"
-                  [attr.aria-label]="'Remove number ' + num"
+                  [attr.aria-label]="t()('caller.removeNumber', { num })"
                   type="button"
                 >
                   <mat-icon>close</mat-icon>
@@ -86,7 +87,7 @@ import type { GameMode } from '../../domain/game-mode.type';
             }
           </div>
           @if (calledNumbers().length > 15) {
-            <span class="history-total">+{{ calledNumbers().length - 15 }} more</span>
+            <span class="history-total">{{ t()('caller.moreCount', { count: calledNumbers().length - 15 }) }}</span>
           }
         </div>
       }
@@ -201,6 +202,9 @@ import type { GameMode } from '../../domain/game-mode.type';
   `],
 })
 export class NumberCallerComponent {
+  private readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
+
   readonly calledNumbers = input.required<number[]>();
   readonly recentCalledNumbers = input<number[]>([]);
   readonly gameMode = input.required<GameMode>();
@@ -228,7 +232,7 @@ export class NumberCallerComponent {
   }
 
   protected onReset(): void {
-    if (confirm('Reset the game? All marks will be cleared.')) {
+    if (confirm(this.t()('caller.resetConfirm'))) {
       this.resetRequested.emit();
     }
   }

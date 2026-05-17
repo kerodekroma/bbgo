@@ -3,6 +3,7 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 export interface ClearDialogResult {
   resetGame: boolean;
   deleteCards: boolean;
@@ -20,33 +21,33 @@ export interface ClearDialogResult {
   template: `
     <h2 mat-dialog-title>
       <mat-icon class="title-icon">delete_sweep</mat-icon>
-      Clear Data
+      {{ t()('clearDialog.title') }}
     </h2>
 
     <mat-dialog-content>
-      <p class="description">Select what to clear. This action cannot be undone.</p>
+      <p class="description">{{ t()('clearDialog.description') }}</p>
 
       <div class="options">
         <label class="option-row" (click)="resetGame.set(!resetGame())">
           <mat-checkbox [checked]="resetGame()" (click)="$event.stopPropagation()" (change)="resetGame.set($event.checked)" />
           <span class="option-text">
-            <strong>Clear called numbers</strong>
-            <span class="option-hint">Resets number history and all card marks. Keeps your cards.</span>
+            <strong>{{ t()('clearDialog.clearNumbers') }}</strong>
+            <span class="option-hint">{{ t()('clearDialog.clearNumbersHint') }}</span>
           </span>
         </label>
 
         <label class="option-row" (click)="deleteCards.set(!deleteCards())">
           <mat-checkbox [checked]="deleteCards()" (click)="$event.stopPropagation()" (change)="deleteCards.set($event.checked)" />
           <span class="option-text">
-            <strong>Delete all cards</strong>
-            <span class="option-hint">Removes every card from the session. Cannot be undone.</span>
+            <strong>{{ t()('clearDialog.deleteCards') }}</strong>
+            <span class="option-hint">{{ t()('clearDialog.deleteCardsHint') }}</span>
           </span>
         </label>
       </div>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="dialogRef.close()">Cancel</button>
+      <button mat-button (click)="dialogRef.close()">{{ t()('common.cancel') }}</button>
       <button
         mat-raised-button
         color="warn"
@@ -54,7 +55,7 @@ export interface ClearDialogResult {
         (click)="onClear()"
       >
         <mat-icon>delete</mat-icon>
-        Clear
+        {{ t()('clearDialog.clear') }}
       </button>
     </mat-dialog-actions>
   `,
@@ -97,6 +98,9 @@ export interface ClearDialogResult {
   `],
 })
 export class ClearDialogComponent {
+  private readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
+
   readonly dialogRef = inject(MatDialogRef<ClearDialogComponent, ClearDialogResult>);
 
   protected readonly resetGame = signal(false);

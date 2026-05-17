@@ -7,6 +7,7 @@ import type { CardId } from '../../domain/card-id.vo';
 import type { WinPattern } from '../../domain/win-pattern.type';
 import { BingoFacade } from '../../application/bingo.facade';
 import { APP_VERSION } from '../../../../shared/lib/version';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 import { NumberCallerComponent } from '../../ui/number-caller/number-caller.component';
 import { NumberBoardComponent } from '../../ui/number-board/number-board.component';
 import { CardTabsComponent } from '../../ui/card-tabs/card-tabs.component';
@@ -37,8 +38,8 @@ interface WinEntry {
       <header class="game-header">
         <h1 class="game-title">
           <mat-icon class="title-icon">casino</mat-icon>
-          BINGO TRACKER
-          <span class="version-badge">v{{ APP_VERSION }}</span>
+          {{ t()('app.title') }}
+          <span class="version-badge">{{ t()('app.version', { version: APP_VERSION }) }}</span>
         </h1>
         <div class="header-actions">
           <button
@@ -49,13 +50,13 @@ interface WinEntry {
             type="button"
           >
             <mat-icon class="save-btn-icon">{{ facade.dirty() ? 'save' : 'cloud_done' }}</mat-icon>
-            <span class="save-btn-label">{{ facade.dirty() ? 'Save Session' : 'Saved' }}</span>
+            <span class="save-btn-label">{{ facade.dirty() ? t()('app.saveSession') : t()('app.saved') }}</span>
           </button>
           <button
             mat-icon-button
             class="clear-btn"
             (click)="onOpenClearDialog()"
-            aria-label="Clear data"
+            [attr.aria-label]="t()('app.clearData')"
             type="button"
           >
             <mat-icon>delete_sweep</mat-icon>
@@ -64,10 +65,19 @@ interface WinEntry {
             mat-icon-button
             class="settings-btn"
             (click)="onOpenSettings()"
-            aria-label="Pattern settings"
+            [attr.aria-label]="t()('app.patternSettings')"
             type="button"
           >
             <mat-icon>tune</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="language-btn"
+            (click)="onSwitchLanguage()"
+            [attr.aria-label]="t()('app.switchLanguage')"
+            type="button"
+          >
+            <mat-icon>translate</mat-icon>
           </button>
         </div>
       </header>
@@ -213,6 +223,9 @@ interface WinEntry {
 })
 export class BingoGamePageComponent {
   protected readonly facade = inject(BingoFacade);
+  protected readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
+  protected readonly locale = this.i18n.locale;
   protected readonly APP_VERSION = APP_VERSION;
   private readonly dialog = inject(MatDialog);
 
@@ -294,6 +307,10 @@ export class BingoGamePageComponent {
     this.dialog.open(SettingsDialogComponent, {
       width: '400px',
     });
+  }
+
+  protected onSwitchLanguage(): void {
+    this.i18n.switchLanguage(this.locale() === 'en' ? 'es' : 'en');
   }
 
   protected onGameModeChanged(mode: 'caller' | 'card-only'): void {

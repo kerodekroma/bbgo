@@ -3,13 +3,14 @@ import { FormsModule } from '@angular/forms';
 import type { BingoCard } from '../../domain/bingo-card.entity';
 import type { GameMode } from '../../domain/game-mode.type';
 import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 
 @Component({
   selector: 'app-bingo-card',
   standalone: true,
   imports: [FormsModule],
   template: `
-    <div class="bingo-card" role="grid" aria-label="Bingo card">
+    <div class="bingo-card" role="grid" [attr.aria-label]="t()('bingoCard.gridAria')">
       <div class="bingo-header" role="row">
         @for (col of columns(); track col) {
           <div class="bingo-header-cell" role="columnheader">{{ col }}</div>
@@ -42,7 +43,7 @@ import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
                 (ngModelChange)="onNumberChange(row, col, $event)"
                 (blur)="onNumberBlur(row, col)"
                 role="gridcell"
-                [attr.aria-label]="'Edit Row ' + (row + 1) + ', Column ' + columns()[col]"
+                [attr.aria-label]="t()('bingoCard.editCellAria', { row: row + 1, col: columns()[col] ?? '' })"
               />
             } @else {
               <div
@@ -212,6 +213,8 @@ export class BingoCardComponent {
   readonly numberChanged = output<{ row: number; col: number; newNumber: number }>();
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
 
   constructor() {
     // OnPush doesn't detect deep mutations on the card entity,
@@ -319,10 +322,12 @@ export class BingoCardComponent {
   }
 
   protected getAriaLabel(cell: { isFree?: boolean; isMarked?: boolean; isWinningCell?: boolean; number?: { value: number } | null } | undefined, row: number, col: number): string {
-    if (!cell) return `Row ${row + 1}, Column ${COLUMNS[col]}`;
-    if (cell.isFree) return `Row ${row + 1}, Column ${COLUMNS[col]}, FREE space`;
-    const state = cell.isMarked ? 'marked' : 'unmarked';
+    const colLabel = COLUMNS[col] ?? '';
+    if (!cell) return this.t()('bingoCard.cellAria', { row: row + 1, col: colLabel });
+    if (cell.isFree) return this.t()('bingoCard.freeCellAria', { row: row + 1, col: colLabel });
+    const state = cell.isMarked ? this.t()('bingoCard.marked') : this.t()('bingoCard.unmarked');
     const win = cell.isWinningCell ? ', winning' : '';
-    return `Row ${row + 1}, Column ${COLUMNS[col]}, number ${cell.number?.value}, ${state}${win}`;
+    const value = cell.number?.value ?? 0;
+    return this.t()('bingoCard.markedCellAria', { row: row + 1, col: colLabel, value, state }) + win;
   }
 }

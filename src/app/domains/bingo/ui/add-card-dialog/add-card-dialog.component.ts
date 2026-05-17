@@ -10,6 +10,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
 import { BingoFacade } from '../../application/bingo.facade';
 import { OcrCancelledError } from '../../data/ocr.service';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 
 @Component({
   selector: 'app-add-card-dialog',
@@ -25,25 +26,25 @@ import { OcrCancelledError } from '../../data/ocr.service';
     MatSnackBarModule,
   ],
   template: `
-    <h2 mat-dialog-title>Add Bingo Card</h2>
+    <h2 mat-dialog-title>{{ t()('addCard.title') }}</h2>
 
     <mat-dialog-content>
       <mat-tab-group [(selectedIndex)]="selectedTabIndex">
         <!-- Manual Entry Tab -->
-        <mat-tab label="Manual Entry">
+        <mat-tab [label]="t()('addCard.manualEntry')">
           <div class="manual-entry">
             <mat-form-field appearance="outline" class="code-field">
-              <mat-label>Card Code (optional)</mat-label>
-              <input matInput [(ngModel)]="cardCode" placeholder="e.g., My Card" maxlength="20" />
+              <mat-label>{{ t()('addCard.cardCode') }}</mat-label>
+              <input matInput [(ngModel)]="cardCode" [placeholder]="t()('addCard.cardCodePlaceholder')" maxlength="20" />
             </mat-form-field>
 
             @if (ocrConfidence() !== null) {
               <div class="ocr-status">
                 <mat-icon>{{ ocrConfidence()! >= 60 ? 'check_circle' : 'warning' }}</mat-icon>
                 <span>
-                  OCR confidence: <strong>{{ ocrConfidence() }}%</strong>
+                  {{ t()('addCard.ocrConfidence', { confidence: ocrConfidence()! }) }}
                   @if (lowConfidenceCells().size > 0) {
-                    &nbsp;·&nbsp; {{ lowConfidenceCells().size }} cell(s) flagged — review below
+                    &nbsp;·&nbsp; {{ t()('addCard.cellsFlagged', { count: lowConfidenceCells().size }) }}
                   }
                 </span>
               </div>
@@ -59,7 +60,7 @@ import { OcrCancelledError } from '../../data/ocr.service';
                 <div class="grid-row">
                   @for (c of [0,1,2,3,4]; track c) {
                     @if (r === 2 && c === 2) {
-                      <div class="grid-cell free-cell">FREE</div>
+                      <div class="grid-cell free-cell">{{ t()('addCard.free') }}</div>
                     } @else {
                       <input
                         class="grid-cell-input"
@@ -70,7 +71,7 @@ import { OcrCancelledError } from '../../data/ocr.service';
                         [max]="getMax(c)"
                         [ngModel]="getGridValue(r, c)"
                         (ngModelChange)="onGridValueChange(r, c, $event)"
-                        [attr.aria-label]="'Row ' + (r + 1) + ', Column ' + columnLabels[c]"
+                        [attr.aria-label]="t()('addCard.cellAria', { row: r + 1, col: columnLabels[c] ?? '' })"
                       />
                     }
                   }
@@ -85,9 +86,9 @@ import { OcrCancelledError } from '../../data/ocr.service';
         </mat-tab>
 
         <!-- Photo Upload Tab -->
-        <mat-tab label="Photo Upload">
+        <mat-tab [label]="t()('addCard.photoUpload')">
           <div class="photo-upload">
-            <p>Take a photo or upload an image of your bingo card to extract numbers.</p>
+            <p>{{ t()('addCard.photoDescription') }}</p>
 
             <div
               class="drop-zone"
@@ -99,7 +100,7 @@ import { OcrCancelledError } from '../../data/ocr.service';
               @if (!selectedFile()) {
                 <div class="drop-content">
                   <mat-icon class="upload-icon">{{ isMobile() ? 'photo_camera' : 'cloud_upload' }}</mat-icon>
-                  <p>{{ isMobile() ? 'Tap below to take a photo or choose an image' : 'Drag & drop an image here, or click to browse' }}</p>
+                  <p>{{ isMobile() ? t()('addCard.mobilePrompt') : t()('addCard.desktopPrompt') }}</p>
                   <input
                     #fileInput
                     type="file"
@@ -111,11 +112,11 @@ import { OcrCancelledError } from '../../data/ocr.service';
                   <div class="photo-buttons">
                     <button mat-stroked-button (click)="fileInput.click()">
                       <mat-icon>photo_camera</mat-icon>
-                      Take Photo
+                      {{ t()('addCard.takePhoto') }}
                     </button>
                     <button mat-stroked-button (click)="fileInput.click(); $event.preventDefault()">
                       <mat-icon>photo_library</mat-icon>
-                      Browse
+                      {{ t()('addCard.browse') }}
                     </button>
                   </div>
                 </div>
@@ -123,7 +124,7 @@ import { OcrCancelledError } from '../../data/ocr.service';
                 <div class="file-selected">
                   <mat-icon>image</mat-icon>
                   <p>{{ selectedFile()?.name }}</p>
-                  <button mat-stroked-button (click)="clearFile()">Change</button>
+                  <button mat-stroked-button (click)="clearFile()">{{ t()('addCard.change') }}</button>
                 </div>
               }
             </div>
@@ -136,7 +137,7 @@ import { OcrCancelledError } from '../../data/ocr.service';
                 class="process-btn"
               >
                 <mat-icon>auto_fix_high</mat-icon>
-                Extract Numbers
+                {{ t()('addCard.extractNumbers') }}
               </button>
             }
 
@@ -162,7 +163,7 @@ import { OcrCancelledError } from '../../data/ocr.service';
                   type="button"
                 >
                   <mat-icon>close</mat-icon>
-                  Cancel
+                  {{ t()('common.cancel') }}
                 </button>
               </div>
             }
@@ -172,14 +173,14 @@ import { OcrCancelledError } from '../../data/ocr.service';
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="dialogRef.close()">Cancel</button>
+      <button mat-button (click)="dialogRef.close()">{{ t()('common.cancel') }}</button>
       <button
         mat-raised-button
         color="primary"
         [disabled]="!isManualEntryValid()"
         (click)="onAddManual()"
       >
-        Add Card
+        {{ t()('card.add') }}
       </button>
     </mat-dialog-actions>
   `,
@@ -239,6 +240,8 @@ import { OcrCancelledError } from '../../data/ocr.service';
 export class AddCardDialogComponent {
   private readonly facade = inject(BingoFacade);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
   protected readonly dialogRef = inject(MatDialogRef<AddCardDialogComponent>);
 
   protected readonly columnLabels = COLUMNS;
@@ -315,10 +318,10 @@ export class AddCardDialogComponent {
     const code = this.cardCode().trim() || undefined;
     const result = this.facade.addCard(code, gridNumbers);
     if (result.ok) {
-      this.snackBar.open('Card added!', 'OK', { duration: 2000 });
+      this.snackBar.open(this.t()('addCard.addedSnack'), this.t()('common.ok'), { duration: 2000 });
       this.dialogRef.close(true);
     } else {
-      this.validationError.set('Failed to add card.');
+      this.validationError.set(this.t()('addCard.failed'));
     }
   }
 
@@ -375,19 +378,19 @@ export class AddCardDialogComponent {
 
     this.isProcessing.set(true);
     this.ocrProgress.set(0);
-    this.processingLabel.set('Preparing image…');
+    this.processingLabel.set(this.t()('addCard.preparing'));
 
     try {
       const result = await this.facade.processOcrImage(file, (pct) => {
         this.ocrProgress.set(pct);
         if (pct < 25) {
-          this.processingLabel.set('Preparing image…');
+          this.processingLabel.set(this.t()('addCard.preparing'));
         } else if (pct < 90) {
-          this.processingLabel.set('Reading numbers…');
+          this.processingLabel.set(this.t()('addCard.reading'));
         } else if (pct < 100) {
-          this.processingLabel.set('Parsing results…');
+          this.processingLabel.set(this.t()('addCard.parsing'));
         } else {
-          this.processingLabel.set('Done');
+          this.processingLabel.set(this.t()('addCard.done'));
         }
       });
 
@@ -413,20 +416,20 @@ export class AddCardDialogComponent {
       const lowCount = result.lowConfidenceCells.length;
       if (lowCount > 0) {
         this.snackBar.open(
-          `Numbers extracted (${result.confidence}% confidence). ${lowCount} cell(s) flagged for review.`,
-          'Review',
+          this.t()('addCard.extractedWithFlags', { confidence: result.confidence, count: lowCount }),
+          this.t()('addCard.reviewSnack'),
           { duration: 5000 },
         );
       } else {
-        this.snackBar.open(`Numbers extracted successfully (${result.confidence}% confidence).`, 'OK', { duration: 3000 });
+        this.snackBar.open(this.t()('addCard.extractedSuccess', { confidence: result.confidence }), this.t()('common.ok'), { duration: 3000 });
       }
     } catch (err) {
       if (err instanceof OcrCancelledError) {
-        this.snackBar.open('OCR cancelled.', 'OK', { duration: 2000 });
+        this.snackBar.open(this.t()('addCard.ocrCancelled'), this.t()('common.ok'), { duration: 2000 });
       } else {
         this.snackBar.open(
-          'OCR processing failed. Make sure the image is clear and try again, or use manual entry.',
-          'OK',
+          this.t()('addCard.ocrFailed'),
+          this.t()('common.ok'),
           { duration: 5000 },
         );
       }
@@ -444,7 +447,7 @@ export class AddCardDialogComponent {
   /** Show a confirmation before cancelling OCR in progress. Returns true if user confirms. */
   private async confirmCancelOcr(): Promise<boolean> {
     if (!this.isProcessing()) return true;
-    const confirmed = window.confirm('OCR is still processing. Cancel and change the image?');
+    const confirmed = window.confirm(this.t()('addCard.ocrCancelConfirm'));
     if (confirmed) {
       this.onCancelOcr();
     }

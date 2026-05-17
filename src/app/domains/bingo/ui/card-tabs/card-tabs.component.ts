@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, inject, input, output, signal } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIconModule } from '@angular/material/icon';
@@ -9,8 +9,8 @@ import type { BingoCard } from '../../domain/bingo-card.entity';
 import type { CardId } from '../../domain/card-id.vo';
 import type { GameMode } from '../../domain/game-mode.type';
 import type { WinPattern, WinPatternKind } from '../../domain/win-pattern.type';
-import { PATTERN_LABELS } from '../../domain/win-pattern.type';
 import { BingoCardComponent } from '../bingo-card/bingo-card.component';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 
 @Component({
   selector: 'app-card-tabs',
@@ -28,11 +28,11 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
     @if (cards().length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">grid_view</mat-icon>
-        <h2>No Bingo Cards Yet</h2>
-        <p>Add your first bingo card to get started!</p>
+        <h2>{{ t()('card.noCards') }}</h2>
+        <p>{{ t()('card.addFirst') }}</p>
         <button mat-raised-button color="primary" (click)="addCard.emit()">
           <mat-icon>add</mat-icon>
-          Add Card
+          {{ t()('card.add') }}
         </button>
       </div>
     } @else {
@@ -62,12 +62,12 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
                     <span
                       class="card-code"
                       (click)="onRenameStart(card.id)"
-                      [attr.aria-label]="'Click to rename ' + card.code"
-                      title="Click to rename"
+                      [attr.aria-label]="t()('card.renameAria', { code: card.code })"
+                      [title]="t()('card.clickToRename')"
                     >{{ card.code }}</span>
                   }
                   @if (winResults().has(card.id)) {
-                    <mat-icon class="win-icon" matTooltip="Winner!">emoji_events</mat-icon>
+                    <mat-icon class="win-icon" [matTooltip]="t()('card.winner')">emoji_events</mat-icon>
                   }
                 </mat-panel-title>
                 <mat-panel-description class="panel-description">
@@ -88,16 +88,16 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
                   <button
                     mat-icon-button
                     (click)="onToggleEdit(card.id)"
-                    [attr.aria-label]="'Edit card ' + card.code"
-                    [matTooltip]="editModes()[card.id] ? 'Done editing' : 'Edit card numbers'"
+                    [attr.aria-label]="t()('card.editCard', { code: card.code })"
+                    [matTooltip]="editModes()[card.id] ? t()('card.doneEditing') : t()('card.editNumbers')"
                   >
                     <mat-icon>{{ editModes()[card.id] ? 'check_circle' : 'edit' }}</mat-icon>
                   </button>
                   <button
                     mat-icon-button
                     (click)="onResetCard(card.id)"
-                    [attr.aria-label]="'Reset card ' + card.code"
-                    matTooltip="Clear all marks"
+                    [attr.aria-label]="t()('card.resetCard', { code: card.code })"
+                    [matTooltip]="t()('card.clearMarks')"
                   >
                     <mat-icon>replay</mat-icon>
                   </button>
@@ -105,8 +105,8 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
                     mat-icon-button
                     color="warn"
                     (click)="onDeleteCard(card.id)"
-                    [attr.aria-label]="'Delete card ' + card.code"
-                    matTooltip="Delete card"
+                    [attr.aria-label]="t()('card.deleteCard', { code: card.code })"
+                    [matTooltip]="t()('card.deleteTitle')"
                   >
                     <mat-icon>delete</mat-icon>
                   </button>
@@ -132,7 +132,7 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
           (click)="addCard.emit()"
         >
           <mat-icon>add</mat-icon>
-          Add Card
+          {{ t()('card.add') }}
         </button>
       </div>
     }
@@ -293,6 +293,9 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
   `],
 })
 export class CardTabsComponent {
+  private readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
+
   readonly cards = input.required<BingoCard[]>();
   readonly activeCardId = input<CardId | null>(null);
   readonly gameMode = input.required<GameMode>();
@@ -326,7 +329,7 @@ export class CardTabsComponent {
       const cells = card.grid.filter(c => !c.isFree);
       const marked = cells.filter(c => c.isMarked).length;
       const pct = cells.length > 0 ? Math.round((marked / cells.length) * 100) : 0;
-      return { pct, label: 'Marked' };
+      return { pct, label: this.t()('card.marked') };
     }
 
     let bestKind: WinPatternKind = enabled[0]!;
@@ -340,7 +343,7 @@ export class CardTabsComponent {
       }
     }
 
-    return { pct: bestPct, label: PATTERN_LABELS[bestKind] };
+    return { pct: bestPct, label: this.t()('pattern.' + bestKind) };
   }
 
   protected getProgressClass(pct: number): string {
@@ -355,7 +358,7 @@ export class CardTabsComponent {
   }
 
   protected onDeleteCard(id: CardId): void {
-    if (confirm('Delete this card?')) {
+    if (confirm(this.t()('card.deleteConfirm'))) {
       this.deleteCard.emit(id);
     }
   }

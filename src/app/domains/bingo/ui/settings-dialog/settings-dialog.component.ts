@@ -5,8 +5,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { FormsModule } from '@angular/forms';
 import { BingoFacade } from '../../application/bingo.facade';
-import { PATTERN_LABELS, DEFAULT_PATTERN_SETTINGS } from '../../domain/win-pattern.type';
+import { DEFAULT_PATTERN_SETTINGS } from '../../domain/win-pattern.type';
 import type { WinPatternKind } from '../../domain/win-pattern.type';
+import { LanguageService } from '../../../../shared/i18n/language.service';
 
 /** Patterns the user can toggle (excludes inferred patterns like multi-line and full-house) */
 const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
@@ -32,16 +33,16 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
   template: `
     <h2 mat-dialog-title>
       <mat-icon>tune</mat-icon>
-      Win Pattern Settings
+      {{ t()('settings.title') }}
     </h2>
 
     <mat-dialog-content>
-      <p class="description">Enable or disable which patterns are checked for wins.</p>
+      <p class="description">{{ t()('settings.description') }}</p>
 
       <div class="settings-list">
         @for (kind of toggleablePatterns; track kind) {
           <label class="setting-row">
-            <span class="setting-label">{{ labels[kind] }}</span>
+            <span class="setting-label">{{ t()('pattern.' + kind) }}</span>
             <mat-slide-toggle
               [checked]="enabledSet().has(kind)"
               (toggleChange)="toggle(kind)"
@@ -52,13 +53,13 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
 
       <div class="always-on">
         <mat-icon>info_outline</mat-icon>
-        <span>Multi-Line and Full House are always detected when applicable.</span>
+        <span>{{ t()('settings.alwaysOn') }}</span>
       </div>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="resetToDefaults()">Reset Defaults</button>
-      <button mat-raised-button color="primary" (click)="dialogRef.close()">Done</button>
+      <button mat-button (click)="resetToDefaults()">{{ t()('settings.resetDefaults') }}</button>
+      <button mat-raised-button color="primary" (click)="dialogRef.close()">{{ t()('common.done') }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -109,10 +110,11 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
 })
 export class SettingsDialogComponent {
   private readonly facade = inject(BingoFacade);
+  private readonly i18n = inject(LanguageService);
+  protected readonly t = this.i18n.t;
   readonly dialogRef = inject(MatDialogRef<SettingsDialogComponent>);
 
   protected readonly toggleablePatterns = TOGGLEABLE_PATTERNS;
-  protected readonly labels = PATTERN_LABELS;
 
   protected readonly enabledSet = signal<Set<WinPatternKind>>(
     new Set(this.facade.patternSettings().enabled),
