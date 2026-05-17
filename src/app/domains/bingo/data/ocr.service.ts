@@ -4,7 +4,8 @@ import type { GridCell } from '../domain/grid-cell.vo';
 import { createGridCell } from '../domain/grid-cell.vo';
 import { getColumnForNumber } from '../domain/bingo-column.type';
 import type { BingoColumn } from '../domain/bingo-column.type';
-import { createWorker, PSM, type Worker } from 'tesseract.js';
+import { createWorker, PSM } from 'tesseract.js';
+import type { Worker, LoggerMessage } from 'tesseract.js';
 
 export interface OcrResult {
   cells: GridCell[][];
@@ -72,91 +73,126 @@ function preprocessImage(file: File): Promise<Blob> {
   });
 }
 
+/** Cancelled error sentinel — thrown when OCR is aborted by the user */
+export class OcrCancelledError extends Error {
+  constructor() {
+    super('OCR cancelled');
+    this.name = 'OcrCancelledError';
+  }
+}
+
 @Injectable({ providedIn: 'root' })
 export class OcrService implements OnDestroy {
-  private workerPromise: Promise<Worker> | null = null;
+  /** Tracks the current OCR job for cancellation */
+  private currentJob: { workerPromise: Promise<Worker>; worker: Worker | null; aborted: boolean } | null = null;
 
   /**
    * Process a bingo card image and extract the 5×5 grid numbers.
    *
-   * Improvements over basic Tesseract.js usage:
-   *  - Image preprocessing (grayscale + contrast + resize) before OCR
-   *  - Worker reused across calls (no create/terminate per image)
-   *  - PSM set to single-uniform-block (not default auto-page-seg)
+   * Features:
+   *  - Image preprocessing (grayscale + contrast + resize)
+   *  - Progress reporting via callback (0–100)
+   *  - Cancellable via cancelProcessing()
+   *  - PSM set to single-uniform-block for grids
    *  - Character whitelist restricts to digits only
    *  - Spatial word-position parsing for robust grid extraction
    *
-   * Returns the extracted cells with per-cell confidence scores.
-   * Low-confidence cells (< 60%) are flagged for user review.
+   * @param file The image file to process
+   * @param onProgress Optional callback receiving estimated progress (0–100)
+   * @throws OcrCancelledError if cancelProcessing() is called during execution
    */
-  async processImage(file: File): Promise<OcrResult> {
-    // 1. Preprocess image
-    const processedBlob = await preprocessImage(file);
+  async processImage(file: File, onProgress?: (progress: number) => void): Promise<OcrResult> {
+    // ── Track current job for cancellation ──
+    const abort = { aborted: false };
+    this.currentJob = { workerPromise: null as never, worker: null, aborted: false };
 
-    // 2. Get or create reusable worker
-    const worker = await this.getWorker();
+    const checkAborted = () => {
+      if (abort.aborted || this.currentJob?.aborted) throw new OcrCancelledError();
+    };
 
-    // 3. Set optimal params for number recognition
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-      tessedit_char_whitelist: '0123456789',
-    });
+    try {
+      // ── 1. Preprocess image (0 → 25%) ──
+      onProgress?.(5);
+      const processedBlob = await preprocessImage(file);
+      checkAborted();
+      onProgress?.(25);
 
-    // 4. Recognize with spatial word data
-    const { data } = await worker.recognize(processedBlob);
-    const words = data.words ?? [];
+      // ── 2. Create worker with progress logger (25 → 90%) ──
+      const worker = await createWorker('eng', undefined, {
+        logger: (msg: LoggerMessage) => {
+          if (msg.status === 'recognizing text') {
+            onProgress?.(25 + Math.round(msg.progress * 65));
+          }
+        },
+      });
+      this.currentJob.worker = worker;
+      this.currentJob.workerPromise = Promise.resolve(worker);
+      checkAborted();
 
-    // 5. Parse spatially — use word bounding boxes to build the 5×5 grid
-    const cells = this.parseWordsToGrid(words);
-    const avgConfidence = words.length > 0
-      ? Math.round(words.reduce((sum, w) => sum + (w.confidence ?? 0), 0) / words.length)
-      : 0;
+      // ── 3. Set optimal params for number-only recognition ──
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+        tessedit_char_whitelist: '0123456789',
+      });
 
-    // 6. Flag low-confidence cells
-    const lowConfidenceCells: Array<{ row: number; col: number; confidence: number }> = [];
-    for (const word of words) {
-      // Only flag grid-valid numbers
-      const num = parseInt(word.text, 10);
-      if (num >= 1 && num <= 75 && (word.confidence ?? 0) < 60) {
-        const pos = this.findGridPosition(cells, num);
-        if (pos) {
-          lowConfidenceCells.push({ row: pos.row, col: pos.col, confidence: Math.round(word.confidence ?? 0) });
+      // ── 4. Recognize ──
+      const { data } = await worker.recognize(processedBlob);
+      checkAborted();
+      onProgress?.(92);
+
+      const words = data.words ?? [];
+
+      // ── 5. Parse spatially — use word bounding boxes to build the 5×5 grid ──
+      const cells = this.parseWordsToGrid(words);
+      onProgress?.(96);
+
+      const avgConfidence = words.length > 0
+        ? Math.round(words.reduce((sum, w) => sum + (w.confidence ?? 0), 0) / words.length)
+        : 0;
+
+      // ── 6. Flag low-confidence cells ──
+      const lowConfidenceCells: Array<{ row: number; col: number; confidence: number }> = [];
+      for (const word of words) {
+        const num = parseInt(word.text, 10);
+        if (num >= 1 && num <= 75 && (word.confidence ?? 0) < 60) {
+          const pos = this.findGridPosition(cells, num);
+          if (pos) {
+            lowConfidenceCells.push({ row: pos.row, col: pos.col, confidence: Math.round(word.confidence ?? 0) });
+          }
         }
       }
-    }
 
-    return {
-      cells,
-      confidence: avgConfidence,
-      lowConfidenceCells,
-    };
+      onProgress?.(100);
+      return { cells, confidence: avgConfidence, lowConfidenceCells };
+    } finally {
+      // ── Cleanup: terminate the per-call worker ──
+      if (this.currentJob?.worker) {
+        try { await this.currentJob.worker.terminate(); } catch { /* ignore */ }
+      }
+      this.currentJob = null;
+    }
+  }
+
+  /**
+   * Cancel the current OCR processing (if any).
+   * The in-flight processImage() promise will reject with OcrCancelledError.
+   */
+  cancelProcessing(): void {
+    const job = this.currentJob;
+    if (job) {
+      job.aborted = true;
+      if (job.worker) {
+        job.worker.terminate().catch(() => {});
+      }
+    }
   }
 
   /** Cleanup worker on service destroy */
   ngOnDestroy(): void {
-    this.terminateWorker();
+    this.cancelProcessing();
   }
 
   // ── Private ──
-
-  /**
-   * Get or create a reusable Tesseract worker.
-   * Only one worker is kept alive across calls to avoid
-   * re-downloading the language model every time.
-   */
-  private async getWorker(): Promise<Worker> {
-    if (this.workerPromise) return this.workerPromise;
-    this.workerPromise = createWorker('eng');
-    return this.workerPromise;
-  }
-
-  private async terminateWorker(): Promise<void> {
-    if (this.workerPromise) {
-      const worker = await this.workerPromise;
-      await worker.terminate();
-      this.workerPromise = null;
-    }
-  }
 
   /**
    * Build a 5×5 grid using word bounding box coordinates.

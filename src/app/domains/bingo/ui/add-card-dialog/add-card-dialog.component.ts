@@ -5,10 +5,11 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
 import { BingoFacade } from '../../application/bingo.facade';
+import { OcrCancelledError } from '../../data/ocr.service';
 
 @Component({
   selector: 'app-add-card-dialog',
@@ -20,7 +21,7 @@ import { BingoFacade } from '../../application/bingo.facade';
     MatInputModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatSnackBarModule,
   ],
   template: `
@@ -141,8 +142,28 @@ import { BingoFacade } from '../../application/bingo.facade';
 
             @if (isProcessing()) {
               <div class="processing">
-                <mat-spinner diameter="32" />
-                <span>Processing image…</span>
+                <div class="processing-progress">
+                  <mat-progress-bar
+                    mode="determinate"
+                    [value]="ocrProgress()"
+                    class="ocr-progress-bar"
+                  />
+                  <span class="processing-text">
+                    <mat-icon class="processing-icon">auto_fix_high</mat-icon>
+                    {{ processingLabel() }}
+                    <strong>{{ ocrProgress() }}%</strong>
+                  </span>
+                </div>
+                <button
+                  mat-stroked-button
+                  color="warn"
+                  (click)="onCancelOcr()"
+                  class="cancel-ocr-btn"
+                  type="button"
+                >
+                  <mat-icon>close</mat-icon>
+                  Cancel
+                </button>
               </div>
             }
           </div>
@@ -207,7 +228,12 @@ import { BingoFacade } from '../../application/bingo.facade';
     .photo-buttons button { display: flex; align-items: center; gap: 4px; }
     .file-selected { display: flex; align-items: center; justify-content: center; gap: 8px; }
     .process-btn { width: 100%; }
-    .processing { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+    .processing { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; }
+    .processing-progress { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+    .ocr-progress-bar { border-radius: 4px; }
+    .processing-text { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: #666; }
+    .processing-icon { font-size: 18px; width: 18px; height: 18px; }
+    .cancel-ocr-btn { font-size: 0.8rem; }
   `],
 })
 export class AddCardDialogComponent {
@@ -227,6 +253,10 @@ export class AddCardDialogComponent {
   protected readonly isDragging = signal(false);
   protected readonly lowConfidenceCells = signal<Set<string>>(new Set());
   protected readonly ocrConfidence = signal<number | null>(null);
+  /** OCR progress percentage (0–100) during processing */
+  protected readonly ocrProgress = signal(0);
+  /** Human-readable stage label during processing */
+  protected readonly processingLabel = signal('Preparing image…');
   /** Detect touch-capable devices to adapt the UI for mobile */
   protected isMobile(): boolean {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -292,11 +322,13 @@ export class AddCardDialogComponent {
     }
   }
 
-  protected onFileSelected(event: Event): void {
+  protected async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    if (input.files?.[0]) {
-      this.selectedFile.set(input.files[0]);
-    }
+    if (!input.files?.[0]) return;
+
+    if (this.isProcessing() && !await this.confirmCancelOcr()) return;
+
+    this.selectedFile.set(input.files[0]);
   }
 
   protected onDragOver(event: DragEvent): void {
@@ -308,15 +340,18 @@ export class AddCardDialogComponent {
     this.isDragging.set(false);
   }
 
-  protected onDrop(event: DragEvent): void {
+  protected async onDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     this.isDragging.set(false);
-    if (event.dataTransfer?.files[0]) {
-      this.selectedFile.set(event.dataTransfer.files[0]);
-    }
+    if (!event.dataTransfer?.files[0]) return;
+
+    if (this.isProcessing() && !await this.confirmCancelOcr()) return;
+
+    this.selectedFile.set(event.dataTransfer.files[0]);
   }
 
-  protected clearFile(): void {
+  protected async clearFile(): Promise<void> {
+    if (this.isProcessing() && !await this.confirmCancelOcr()) return;
     this.selectedFile.set(null);
   }
 
@@ -339,8 +374,22 @@ export class AddCardDialogComponent {
     if (!file) return;
 
     this.isProcessing.set(true);
+    this.ocrProgress.set(0);
+    this.processingLabel.set('Preparing image…');
+
     try {
-      const result = await this.facade.processOcrImage(file);
+      const result = await this.facade.processOcrImage(file, (pct) => {
+        this.ocrProgress.set(pct);
+        if (pct < 25) {
+          this.processingLabel.set('Preparing image…');
+        } else if (pct < 90) {
+          this.processingLabel.set('Reading numbers…');
+        } else if (pct < 100) {
+          this.processingLabel.set('Parsing results…');
+        } else {
+          this.processingLabel.set('Done');
+        }
+      });
 
       // Populate the manual entry grid with OCR results
       const data: Record<string, number | null> = {};
@@ -371,14 +420,34 @@ export class AddCardDialogComponent {
       } else {
         this.snackBar.open(`Numbers extracted successfully (${result.confidence}% confidence).`, 'OK', { duration: 3000 });
       }
-    } catch {
-      this.snackBar.open(
-        'OCR processing failed. Make sure the image is clear and try again, or use manual entry.',
-        'OK',
-        { duration: 5000 },
-      );
+    } catch (err) {
+      if (err instanceof OcrCancelledError) {
+        this.snackBar.open('OCR cancelled.', 'OK', { duration: 2000 });
+      } else {
+        this.snackBar.open(
+          'OCR processing failed. Make sure the image is clear and try again, or use manual entry.',
+          'OK',
+          { duration: 5000 },
+        );
+      }
     } finally {
       this.isProcessing.set(false);
+      this.ocrProgress.set(0);
     }
+  }
+
+  /** Cancel the current OCR processing */
+  protected onCancelOcr(): void {
+    this.facade.cancelOcr();
+  }
+
+  /** Show a confirmation before cancelling OCR in progress. Returns true if user confirms. */
+  private async confirmCancelOcr(): Promise<boolean> {
+    if (!this.isProcessing()) return true;
+    const confirmed = window.confirm('OCR is still processing. Cancel and change the image?');
+    if (confirmed) {
+      this.onCancelOcr();
+    }
+    return confirmed;
   }
 }

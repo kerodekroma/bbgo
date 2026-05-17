@@ -152,8 +152,13 @@ export class BingoFacade {
   }
 
   /** Process OCR image and return extracted grid for user confirmation */
-  async processOcrImage(file: File): Promise<OcrResult> {
-    return this.ocrService.processImage(file);
+  async processOcrImage(file: File, onProgress?: (progress: number) => void): Promise<OcrResult> {
+    return this.ocrService.processImage(file, onProgress);
+  }
+
+  /** Cancel the current OCR processing (if any) */
+  cancelOcr(): void {
+    this.ocrService.cancelProcessing();
   }
 
   /** Confirm and save a card from OCR results */
