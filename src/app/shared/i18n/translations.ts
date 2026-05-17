@@ -13,6 +13,7 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'app.clearData': 'Clear data',
     'app.patternSettings': 'Pattern settings',
     'app.switchLanguage': 'Switch to Spanish',
+    'app.more': 'More',
 
     'caller.placeholder': 'Enter called number…',
     'caller.callNumber': 'Call number',
@@ -115,6 +116,7 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'app.clearData': 'Borrar datos',
     'app.patternSettings': 'Config. de patrones',
     'app.switchLanguage': 'Cambiar a Inglés',
+    'app.more': 'Más',
 
     'caller.placeholder': 'Ingresa número llamado…',
     'caller.callNumber': 'Llamar número',

@@ -2,6 +2,8 @@ import { Component, inject, computed, signal, HostListener } from '@angular/core
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import type { CardId } from '../../domain/card-id.vo';
 import type { WinPattern } from '../../domain/win-pattern.type';
@@ -28,6 +30,8 @@ interface WinEntry {
   imports: [
     MatIconModule,
     MatButtonModule,
+    MatMenuModule,
+    MatDividerModule,
     MatButtonToggleModule,
     NumberCallerComponent,
     NumberBoardComponent,
@@ -52,33 +56,62 @@ interface WinEntry {
             <mat-icon class="save-btn-icon">{{ facade.dirty() ? 'save' : 'cloud_done' }}</mat-icon>
             <span class="save-btn-label">{{ facade.dirty() ? t()('app.saveSession') : t()('app.saved') }}</span>
           </button>
+
+          <div class="desktop-buttons">
+            <button
+              mat-icon-button
+              class="clear-btn"
+              (click)="onOpenClearDialog()"
+              [attr.aria-label]="t()('app.clearData')"
+              type="button"
+            >
+              <mat-icon>delete_sweep</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              class="settings-btn"
+              (click)="onOpenSettings()"
+              [attr.aria-label]="t()('app.patternSettings')"
+              type="button"
+            >
+              <mat-icon>tune</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              class="language-btn"
+              (click)="onSwitchLanguage()"
+              [attr.aria-label]="t()('app.switchLanguage')"
+              type="button"
+            >
+              <mat-icon>translate</mat-icon>
+            </button>
+          </div>
+
           <button
             mat-icon-button
-            class="clear-btn"
-            (click)="onOpenClearDialog()"
-            [attr.aria-label]="t()('app.clearData')"
+            class="mobile-menu-btn"
+            [matMenuTriggerFor]="headerMenu"
+            [attr.aria-label]="t()('app.more')"
             type="button"
           >
-            <mat-icon>delete_sweep</mat-icon>
+            <mat-icon>more_vert</mat-icon>
           </button>
-          <button
-            mat-icon-button
-            class="settings-btn"
-            (click)="onOpenSettings()"
-            [attr.aria-label]="t()('app.patternSettings')"
-            type="button"
-          >
-            <mat-icon>tune</mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            class="language-btn"
-            (click)="onSwitchLanguage()"
-            [attr.aria-label]="t()('app.switchLanguage')"
-            type="button"
-          >
-            <mat-icon>translate</mat-icon>
-          </button>
+          <mat-menu #headerMenu="matMenu" xPosition="before">
+            <button mat-menu-item (click)="onSwitchLanguage()">
+              <mat-icon>translate</mat-icon>
+              <span>{{ t()('app.switchLanguage') }}</span>
+              <span class="menu-locale-hint">{{ locale() === 'es' ? 'EN' : 'ES' }}</span>
+            </button>
+            <button mat-menu-item (click)="onOpenSettings()">
+              <mat-icon>tune</mat-icon>
+              <span>{{ t()('app.patternSettings') }}</span>
+            </button>
+            <mat-divider></mat-divider>
+            <button mat-menu-item class="menu-clear-btn" (click)="onOpenClearDialog()">
+              <mat-icon color="warn">delete_sweep</mat-icon>
+              <span class="menu-clear-text">{{ t()('app.clearData') }}</span>
+            </button>
+          </mat-menu>
         </div>
       </header>
 
@@ -172,6 +205,10 @@ interface WinEntry {
       color: #999; align-self: flex-end; margin-bottom: 3px;
     }
     .header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .desktop-buttons { display: flex; align-items: center; gap: 4px; }
+    .mobile-menu-btn { display: none; }
+    .menu-locale-hint { margin-left: auto; font-size: 0.75rem; color: #999; font-weight: 600; }
+    .menu-clear-text { color: #d32f2f; }
     .save-btn { height: 36px; line-height: 36px; font-size: 0.8rem; border-radius: 18px; padding: 0 12px; }
     .save-btn-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
     .save-btn-label { display: inline; }
@@ -218,6 +255,8 @@ interface WinEntry {
       .save-btn-label { display: none; }
       .save-btn { min-width: 36px; padding: 0 8px; border-radius: 50%; }
       .save-btn-icon { margin-right: 0; }
+      .desktop-buttons { display: none; }
+      .mobile-menu-btn { display: inline-flex; }
       .header-actions { gap: 2px; }
     }
     @media (max-width: 380px) {
