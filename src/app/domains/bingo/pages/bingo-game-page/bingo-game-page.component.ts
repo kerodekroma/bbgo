@@ -6,6 +6,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import type { CardId } from '../../domain/card-id.vo';
 import type { WinPattern } from '../../domain/win-pattern.type';
 import { BingoFacade } from '../../application/bingo.facade';
+import { APP_VERSION } from '../../../../shared/lib/version';
 import { NumberCallerComponent } from '../../ui/number-caller/number-caller.component';
 import { NumberBoardComponent } from '../../ui/number-board/number-board.component';
 import { CardTabsComponent } from '../../ui/card-tabs/card-tabs.component';
@@ -37,6 +38,7 @@ interface WinEntry {
         <h1 class="game-title">
           <mat-icon class="title-icon">casino</mat-icon>
           BINGO TRACKER
+          <span class="version-badge">v{{ APP_VERSION }}</span>
         </h1>
         <div class="header-actions">
           <button
@@ -155,6 +157,10 @@ interface WinEntry {
       gap: 8px; letter-spacing: 4px; flex-shrink: 0;
     }
     .title-icon { font-size: 32px; width: 32px; height: 32px; }
+    .version-badge {
+      font-size: 0.65rem; font-weight: 600; letter-spacing: 1px;
+      color: #999; align-self: flex-end; margin-bottom: 3px;
+    }
     .header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
     .save-btn { height: 36px; line-height: 36px; font-size: 0.8rem; border-radius: 18px; padding: 0 12px; }
     .save-btn-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
@@ -207,6 +213,7 @@ interface WinEntry {
 })
 export class BingoGamePageComponent {
   protected readonly facade = inject(BingoFacade);
+  protected readonly APP_VERSION = APP_VERSION;
   private readonly dialog = inject(MatDialog);
 
   /** Toggle between caller input and master board view */
