@@ -27,7 +27,7 @@ import { BingoFacade } from '../../application/bingo.facade';
     <h2 mat-dialog-title>Add Bingo Card</h2>
 
     <mat-dialog-content>
-      <mat-tab-group>
+      <mat-tab-group [(selectedIndex)]="selectedTabIndex">
         <!-- Manual Entry Tab -->
         <mat-tab label="Manual Entry">
           <div class="manual-entry">
@@ -35,6 +35,18 @@ import { BingoFacade } from '../../application/bingo.facade';
               <mat-label>Card Code (optional)</mat-label>
               <input matInput [(ngModel)]="cardCode" placeholder="e.g., My Card" maxlength="20" />
             </mat-form-field>
+
+            @if (ocrConfidence() !== null) {
+              <div class="ocr-status">
+                <mat-icon>{{ ocrConfidence()! >= 60 ? 'check_circle' : 'warning' }}</mat-icon>
+                <span>
+                  OCR confidence: <strong>{{ ocrConfidence() }}%</strong>
+                  @if (lowConfidenceCells().size > 0) {
+                    &nbsp;·&nbsp; {{ lowConfidenceCells().size }} cell(s) flagged — review below
+                  }
+                </span>
+              </div>
+            }
 
             <div class="grid-input">
               <div class="grid-header">
@@ -51,11 +63,12 @@ import { BingoFacade } from '../../application/bingo.facade';
                       <input
                         class="grid-cell-input"
                         [class.invalid]="isCellInvalid(r, c)"
+                        [class.low-confidence]="isLowConfidence(r, c)"
                         type="number"
                         [min]="getMin(c)"
                         [max]="getMax(c)"
                         [ngModel]="getGridValue(r, c)"
-                        (ngModelChange)="setGridValue(r, c, $event)"
+                        (ngModelChange)="onGridValueChange(r, c, $event)"
                         [attr.aria-label]="'Row ' + (r + 1) + ', Column ' + columnLabels[c]"
                       />
                     }
@@ -156,6 +169,8 @@ import { BingoFacade } from '../../application/bingo.facade';
     }
     .grid-cell-input:focus { border-color: var(--bingo-header-bg); box-shadow: 0 0 0 2px rgba(211, 47, 47, 0.2); }
     .grid-cell-input.invalid { border-color: #f44336; background: #fff5f5; }
+    .grid-cell-input.low-confidence { border-color: #ff9800; background: #fff8e1; }
+    .grid-cell-input.low-confidence:focus { box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.3); }
     .free-cell {
       display: flex; align-items: center; justify-content: center;
       background: var(--bingo-free-bg); border: 1px dashed var(--bingo-cell-border);
@@ -163,6 +178,14 @@ import { BingoFacade } from '../../application/bingo.facade';
       color: var(--bingo-free-text); padding: 8px 4px;
     }
     .validation-error { color: #f44336; font-size: 0.85rem; margin-top: 8px; }
+    .ocr-status {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; margin-bottom: 12px;
+      border-radius: 6px; font-size: 0.85rem;
+      background: #e8f5e9; color: #2e7d32;
+    }
+    .ocr-status:has(.mat-icon.warning) { background: #fff3e0; color: #e65100; }
+    .ocr-status .mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .photo-upload { padding: 16px 0; }
     .drop-zone {
       border: 2px dashed #ccc; border-radius: 8px; padding: 32px;
@@ -182,6 +205,7 @@ export class AddCardDialogComponent {
 
   protected readonly columnLabels = COLUMNS;
   protected readonly cardCode = signal('');
+  protected readonly selectedTabIndex = signal(0);
 
   /** Internal 5×5 grid as a flat record keyed by "row-col" */
   private readonly gridData = signal<Record<string, number | null>>({});
@@ -189,6 +213,8 @@ export class AddCardDialogComponent {
   protected readonly selectedFile = signal<File | null>(null);
   protected readonly isProcessing = signal(false);
   protected readonly isDragging = signal(false);
+  protected readonly lowConfidenceCells = signal<Set<string>>(new Set());
+  protected readonly ocrConfidence = signal<number | null>(null);
 
   protected getMin(col: number): number {
     return COLUMN_RANGES[COLUMNS[col]!].min;
@@ -278,19 +304,62 @@ export class AddCardDialogComponent {
     this.selectedFile.set(null);
   }
 
+  protected isLowConfidence(row: number, col: number): boolean {
+    return this.lowConfidenceCells().has(`${row}-${col}`);
+  }
+
+  /** Clear the low-confidence flag when user edits a cell manually */
+  protected onGridValueChange(row: number, col: number, value: number | null): void {
+    this.setGridValue(row, col, value);
+    this.lowConfidenceCells.update(s => {
+      const next = new Set(s);
+      next.delete(`${row}-${col}`);
+      return next;
+    });
+  }
+
   protected async processImage(): Promise<void> {
     const file = this.selectedFile();
     if (!file) return;
 
     this.isProcessing.set(true);
     try {
-      await this.facade.processOcrImage(file);
-      this.snackBar.open('Image processed!', 'OK', { duration: 2000 });
+      const result = await this.facade.processOcrImage(file);
+
+      // Populate the manual entry grid with OCR results
+      const data: Record<string, number | null> = {};
+      for (let r = 0; r < result.cells.length; r++) {
+        for (let c = 0; c < (result.cells[r]?.length ?? 0); c++) {
+          if (r === 2 && c === 2) continue;
+          data[`${r}-${c}`] = result.cells[r]![c]!.number?.value ?? null;
+        }
+      }
+      this.gridData.set(data);
+
+      // Track low-confidence cells for visual review
+      this.lowConfidenceCells.set(
+        new Set(result.lowConfidenceCells.map(c => `${c.row}-${c.col}`)),
+      );
+      this.ocrConfidence.set(result.confidence);
+
+      // Switch to manual entry tab for review/correction
+      this.selectedTabIndex.set(0);
+
+      const lowCount = result.lowConfidenceCells.length;
+      if (lowCount > 0) {
+        this.snackBar.open(
+          `Numbers extracted (${result.confidence}% confidence). ${lowCount} cell(s) flagged for review.`,
+          'Review',
+          { duration: 5000 },
+        );
+      } else {
+        this.snackBar.open(`Numbers extracted successfully (${result.confidence}% confidence).`, 'OK', { duration: 3000 });
+      }
     } catch {
       this.snackBar.open(
-        'OCR not yet fully integrated. Use manual entry for now.',
+        'OCR processing failed. Make sure the image is clear and try again, or use manual entry.',
         'OK',
-        { duration: 4000 },
+        { duration: 5000 },
       );
     } finally {
       this.isProcessing.set(false);
