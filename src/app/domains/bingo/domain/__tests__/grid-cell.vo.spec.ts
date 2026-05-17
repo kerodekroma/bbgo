@@ -12,10 +12,10 @@ describe('GridCell', () => {
     expect(cell.number?.value).toBe(5);
   });
 
-  it('creates FREE cell already marked', () => {
+  it('creates FREE cell unmarked (manually toggleable)', () => {
     const cell = createGridCell(2, 2, null, true);
     expect(cell.isFree).toBe(true);
-    expect(cell.isMarked).toBe(true);
+    expect(cell.isMarked).toBe(false);
     expect(cell.number).toBeNull();
   });
 
@@ -28,9 +28,11 @@ describe('GridCell', () => {
       expect(marked).not.toBe(cell); // new reference
     });
 
-    it('does not mark FREE cell (no-op)', () => {
+    it('marks FREE cell (no longer a no-op)', () => {
       const free = createGridCell(2, 2, null, true);
-      expect(markCell(free)).toBe(free);
+      const marked = markCell(free);
+      expect(marked.isMarked).toBe(true);
+      expect(marked).not.toBe(free);
     });
   });
 
@@ -43,9 +45,11 @@ describe('GridCell', () => {
       expect(unmarked).not.toBe(marked);
     });
 
-    it('does not unmark FREE cell (no-op)', () => {
+    it('unmarks FREE cell (no longer a no-op)', () => {
       const free = createGridCell(2, 2, null, true);
-      expect(unmarkCell(free)).toBe(free);
+      const unmarked = unmarkCell(free);
+      expect(unmarked.isMarked).toBe(false);
+      expect(unmarked).not.toBe(free);
     });
   });
 
@@ -59,7 +63,7 @@ describe('GridCell', () => {
   });
 
   describe('createCellGrid', () => {
-    it('creates 5x5 grid with FREE center', () => {
+    it('creates 5x5 grid with FREE center unmarked', () => {
       const numbers = Array.from({ length: 5 }, (_, row) =>
         Array.from({ length: 5 }, (_, col) => {
           if (row === 2 && col === 2) return null;
@@ -70,7 +74,7 @@ describe('GridCell', () => {
       expect(cells).toHaveLength(25);
       const freeCell = cells.find(c => c.row === 2 && c.col === 2);
       expect(freeCell?.isFree).toBe(true);
-      expect(freeCell?.isMarked).toBe(true);
+      expect(freeCell?.isMarked).toBe(false);
     });
   });
 });

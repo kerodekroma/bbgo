@@ -82,11 +82,11 @@ describe('BingoCard', () => {
       if (!result.ok) expect(result.error.kind).toBe('invalid-grid');
     });
 
-    it('FREE cell at center is always marked', () => {
+    it('FREE cell at center starts unmarked', () => {
       const card = createTestCard();
       const freeCell = card.getCell(2, 2);
       expect(freeCell?.isFree).toBe(true);
-      expect(freeCell?.isMarked).toBe(true);
+      expect(freeCell?.isMarked).toBe(false);
     });
   });
 
@@ -118,10 +118,13 @@ describe('BingoCard', () => {
       if (result.ok) expect(result.value.isMarked).toBe(true);
     });
 
-    it('marks FREE cell — no-op (already marked)', () => {
+    it('markNumber does not mark the FREE cell (no number value)', () => {
       const card = createTestCard();
       const freeCell = card.getCell(2, 2);
-      expect(freeCell?.isMarked).toBe(true);
+      expect(freeCell?.isMarked).toBe(false);
+      // Calling a number that doesn't exist on any cell
+      const result = card.markNumber(999);
+      expect(result.ok).toBe(false);
     });
   });
 
@@ -159,7 +162,7 @@ describe('BingoCard', () => {
       const card = createTestCard();
       card.voidNumber(999); // doesn't exist
       const freeCell = card.getCell(2, 2);
-      expect(freeCell?.isMarked).toBe(true);
+      expect(freeCell?.isMarked).toBe(false);
     });
   });
 
@@ -177,11 +180,13 @@ describe('BingoCard', () => {
       expect(card.getCell(0, 0)?.isMarked).toBe(false);
     });
 
-    it('does not toggle FREE cell', () => {
+    it('toggles FREE cell (now manually markable)', () => {
       const card = createTestCard();
-      const result = card.toggleCell(2, 2);
-      expect(result.ok).toBe(true);
+      expect(card.getCell(2, 2)?.isMarked).toBe(false);
+      card.toggleCell(2, 2);
       expect(card.getCell(2, 2)?.isMarked).toBe(true);
+      card.toggleCell(2, 2);
+      expect(card.getCell(2, 2)?.isMarked).toBe(false);
     });
 
     it('returns error for invalid cell coordinates', () => {
@@ -216,7 +221,6 @@ describe('BingoCard', () => {
     it('detects diagonal win (top-left to bottom-right)', () => {
       const card = createTestCard();
       for (let i = 0; i < 5; i++) {
-        if (i === 2) continue; // FREE at (2,2) already marked
         card.toggleCell(i, i);
       }
       const patterns = card.getWinPatterns();
@@ -226,7 +230,6 @@ describe('BingoCard', () => {
     it('detects anti-diagonal win (top-right to bottom-left)', () => {
       const card = createTestCard();
       for (let i = 0; i < 5; i++) {
-        if (i === 2) continue; // FREE center already marked
         card.toggleCell(i, 4 - i);
       }
       const patterns = card.getWinPatterns();
@@ -237,10 +240,9 @@ describe('BingoCard', () => {
   describe('win detection — full house', () => {
     it('detects full house when all cells are marked', () => {
       const card = createTestCard();
-      // Mark all non-free cells
+      // Mark all cells including FREE
       for (let row = 0; row < 5; row++) {
         for (let col = 0; col < 5; col++) {
-          if (row === 2 && col === 2) continue;
           card.toggleCell(row, col);
         }
       }
@@ -282,9 +284,13 @@ describe('BingoCard', () => {
 
     it('detects letter X (both diagonals)', () => {
       const card = createTestCard();
+      // Toggle main diagonal (includes center)
+      for (let i = 0; i < 5; i++) {
+        card.toggleCell(i, i);
+      }
+      // Toggle anti-diagonal (skip center — already toggled)
       for (let i = 0; i < 5; i++) {
         if (i === 2) continue;
-        card.toggleCell(i, i);
         card.toggleCell(i, 4 - i);
       }
       const patterns = card.getWinPatterns();
@@ -305,9 +311,8 @@ describe('BingoCard', () => {
       const card = createTestCard();
       // Fill row 0 (all 5 cols)
       for (let col = 0; col < 5; col++) card.toggleCell(0, col);
-      // Fill center column (col 2) — skip row 0 (already done) and row 2 (FREE)
+      // Fill center column (col 2) — skip row 0 (already done)
       for (let row = 1; row < 5; row++) {
-        if (row === 2) continue;
         card.toggleCell(row, 2);
       }
       const patterns = card.getWinPatterns();
@@ -358,7 +363,7 @@ describe('BingoCard', () => {
       card.toggleCell(0, 2);
       const originalGrid = card.grid.map(c => ({ ...c }));
       card.resetGame();
-      expect(card.grid.every(c => c.isFree ? c.isMarked : !c.isMarked)).toBe(true);
+      expect(card.grid.every(c => !c.isMarked)).toBe(true);
       expect(card.grid.length).toBe(originalGrid.length);
     });
   });
@@ -391,9 +396,9 @@ describe('BingoCard', () => {
   describe('markedCount', () => {
     it('counts marked cells including FREE', () => {
       const card = createTestCard();
-      expect(card.markedCount).toBe(1); // only FREE is marked initially
-      card.toggleCell(0, 0);
-      expect(card.markedCount).toBe(2);
+      expect(card.markedCount).toBe(0); // nothing marked initially
+      card.toggleCell(2, 2); // mark FREE
+      expect(card.markedCount).toBe(1);
     });
   });
 });

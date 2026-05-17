@@ -1,7 +1,7 @@
 import type { GridCell } from './grid-cell.vo';
 import { markCell, unmarkCell, setCellWinning, createGridCell } from './grid-cell.vo';
 import { createBingoNumber, type Result } from './bingo-number.vo';
-import type { WinPattern } from './win-pattern.type';
+import type { WinPattern, WinPatternKind } from './win-pattern.type';
 import type { CardId } from './card-id.vo';
 import type { BingoColumn } from './bingo-column.type';
 import { COLUMNS, COLUMN_RANGES } from './bingo-column.type';
@@ -128,10 +128,6 @@ export class BingoCard {
 
     if (!cell) {
       return { ok: false, error: { kind: 'invalid-cell', row, col } };
-    }
-
-    if (cell.isFree) {
-      return { ok: true, value: cell }; // FREE cannot be toggled
     }
 
     this._grid = this._grid.map((c, i) =>
@@ -326,11 +322,11 @@ export class BingoCard {
 
   /** Reset game state (clear marks but keep numbers) */
   resetGame(): void {
-    this._grid = this._grid.map(c =>
-      c.isFree
-        ? { ...c, isMarked: true, isWinningCell: false }
-        : { ...c, isMarked: false, isWinningCell: false },
-    );
+    this._grid = this._grid.map(c => ({
+      ...c,
+      isMarked: false,
+      isWinningCell: false,
+    }));
   }
 
   /** Count total marked cells (including FREE) */
@@ -341,6 +337,104 @@ export class BingoCard {
   /** Check if a specific number exists on the card */
   hasNumber(n: number): boolean {
     return this._grid.some(c => !c.isFree && c.number?.value === n);
+  }
+
+  /** Calculate progress (0-100) toward a specific win pattern */
+  getPatternProgress(kind: WinPatternKind): number {
+    const cells = this._grid;
+
+    switch (kind) {
+      case 'single-line': {
+        let best = 0;
+        for (let r = 0; r < 5; r++) {
+          const line = this.getRowCells(r);
+          best = Math.max(best, line.filter(c => c.isMarked).length);
+        }
+        for (let c = 0; c < 5; c++) {
+          const line = this.getColumnCells(c);
+          best = Math.max(best, line.filter(c => c.isMarked).length);
+        }
+        const diag = [0, 1, 2, 3, 4].map(i => cells[i * 5 + i]!);
+        best = Math.max(best, diag.filter(c => c.isMarked).length);
+        const antiDiag = [0, 1, 2, 3, 4].map(i => cells[i * 5 + (4 - i)]!);
+        best = Math.max(best, antiDiag.filter(c => c.isMarked).length);
+        return Math.round((best / 5) * 100);
+      }
+
+      case 'multi-line':
+        // Fall back to single-line progress
+        return this.getPatternProgress('single-line');
+
+      case 'four-corners': {
+        const corners = [cells[0]!, cells[4]!, cells[20]!, cells[24]!];
+        return Math.round((corners.filter(c => c.isMarked).length / 4) * 100);
+      }
+
+      case 'postage-stamp': {
+        let best = 0;
+        const stampCorners: [number, number][] = [[0, 0], [0, 3], [3, 0], [3, 3]];
+        for (const [sr, sc] of stampCorners) {
+          const block = [
+            cells[sr * 5 + sc]!,
+            cells[sr * 5 + sc + 1]!,
+            cells[(sr + 1) * 5 + sc]!,
+            cells[(sr + 1) * 5 + sc + 1]!,
+          ];
+          best = Math.max(best, block.filter(c => c.isMarked).length);
+        }
+        return Math.round((best / 4) * 100);
+      }
+
+      case 'letter-x': {
+        const idxSet = new Set<number>();
+        for (let i = 0; i < 5; i++) {
+          idxSet.add(i * 5 + i);
+          idxSet.add(i * 5 + (4 - i));
+        }
+        const marked = [...idxSet].filter(i => cells[i]?.isMarked).length;
+        return Math.round((marked / idxSet.size) * 100);
+      }
+
+      case 'letter-l': {
+        let best = 0;
+        for (let r = 0; r < 5; r++) {
+          for (let c = 0; c < 5; c++) {
+            if (r === 2 && c === 2) continue;
+            const unique = new Set([
+              ...this.getRowCells(r),
+              ...this.getColumnCells(c),
+            ].map(cell => cell.row * 5 + cell.col));
+            const marked = [...unique].filter(i => cells[i]?.isMarked).length;
+            best = Math.max(best, marked / unique.size);
+          }
+        }
+        return Math.round(best * 100);
+      }
+
+      case 'letter-t': {
+        let best = 0;
+        const centerCol = this.getColumnCells(2);
+        for (let r = 0; r < 5; r++) {
+          if (r === 2) continue;
+          const unique = new Set([
+            ...this.getRowCells(r),
+            ...centerCol,
+          ].map(cell => cell.row * 5 + cell.col));
+          const marked = [...unique].filter(i => cells[i]?.isMarked).length;
+          best = Math.max(best, marked / unique.size);
+        }
+        return Math.round(best * 100);
+      }
+
+      case 'frame': {
+        const frame = cells.filter(c => c.row === 0 || c.row === 4 || c.col === 0 || c.col === 4);
+        return Math.round((frame.filter(c => c.isMarked).length / frame.length) * 100);
+      }
+
+      case 'full-house': {
+        return Math.round((cells.filter(c => c.isMarked).length / 25) * 100);
+      }
+    }
   }
 
   /** Serialize to plain object for storage */

@@ -20,19 +20,17 @@ export function createGridCell(
     row,
     col,
     number,
-    isMarked: isFree, // FREE cells start marked
+    isMarked: false, // FREE cell starts unmarked — manually toggleable
     isFree,
     isWinningCell: false,
   };
 }
 
 export function markCell(cell: GridCell): GridCell {
-  if (cell.isFree) return cell; // FREE is always marked
   return { ...cell, isMarked: true };
 }
 
 export function unmarkCell(cell: GridCell): GridCell {
-  if (cell.isFree) return cell; // FREE cannot be unmarked
   return { ...cell, isMarked: false };
 }
 
