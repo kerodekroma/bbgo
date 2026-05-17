@@ -11,7 +11,9 @@ Replace physical bingo cards with a digital tracker that supports both caller mo
 - **Package Manager:** pnpm
 - **Testing:** Vitest (unit) + Playwright (e2e)
 - **UI:** Angular Material
+- **OCR:** Tesseract.js (browser-based WebAssembly)
 - **Build:** esbuild/Vite via `@angular/build`
+- **Deploy:** GitHub Actions → GitHub Pages
 
 ---
 
@@ -20,27 +22,31 @@ Replace physical bingo cards with a digital tracker that supports both caller mo
 ```
 src/app/domains/bingo/
 ├── domain/          # Pure TS — entities, VOs, win patterns, types
-├── data/            # Angular services — repository impl, localStorage, DTO mapping
+├── data/            # Angular services — repository impl, localStorage, OCR, DTOs
 ├── application/     # Injectable facade — orchestrates use cases
-├── ui/              # Presentation components — card, caller, board, settings
+├── ui/              # Presentation components — card, caller, board, dialogs
 └── pages/           # Route-level lazy component
 ```
 
 ### Key Files
 | Layer | File | Responsibility |
 |-------|------|----------------|
-| Domain | `bingo-card.entity.ts` | Card entity: mark/void cells, win detection, patterns, rename, edit numbers |
+| Domain | `bingo-card.entity.ts` | Card entity: mark/void cells, win detection, pattern progress, rename, edit numbers |
 | Domain | `bingo-number.vo.ts` | Value object for bingo numbers with validation |
-| Domain | `grid-cell.vo.ts` | Cell state (marked, winning, number) |
-| Domain | `win-pattern.type.ts` | Win pattern definitions (Line, Four Corners, X, etc.) |
-| Data | `bingo.repository.ts` | localStorage persistence, save/load/seed |
-| Application | `bingo.facade.ts` | Central state: cards, called numbers, game mode, settings |
-| UI | `bingo-card.component.ts` | 5×5 grid with caller/card mode rendering, edit mode |
+| Domain | `grid-cell.vo.ts` | Cell state (marked, winning, number, FREE toggle) |
+| Domain | `win-pattern.type.ts` | Win pattern definitions (Line, Four Corners, X, etc.) + settings |
+| Data | `card-repository.impl.ts` | localStorage persistence for cards |
+| Data | `game-state.service.ts` | localStorage persistence for game state (called numbers, mode, settings) |
+| Data | `ocr.service.ts` | Tesseract.js OCR — extract numbers from photos |
+| Application | `bingo.facade.ts` | Central state: cards, called numbers, game mode, settings, dirty tracking |
+| UI | `bingo-card.component.ts` | 5×5 grid with caller/card mode rendering, edit mode, FREE click |
 | UI | `number-caller.component.ts` | Caller input + recent 15 chips with undo |
 | UI | `number-board.component.ts` | 75-cell master board (click to call/void) |
-| UI | `card-tabs.component.ts` | MatAccordion with progress bars, inline rename, edit toggle |
+| UI | `card-tabs.component.ts` | MatAccordion with per-pattern progress bars, inline rename, edit toggle |
+| UI | `clear-dialog.component.ts` | Clear dialog with checkboxes for numbers/cards |
+| UI | `add-card-dialog.component.ts` | Manual entry grid + photo upload with OCR |
 | UI | `settings-dialog.component.ts` | Win pattern toggle dialog |
-| Pages | `bingo-game-page.component.ts` | Main page layout, caller/board view toggle |
+| Pages | `bingo-game-page.component.ts` | Main page layout, caller/board toggle, save/clear header |
 
 ---
 
@@ -48,24 +54,31 @@ src/app/domains/bingo/
 
 ### Core Gameplay
 - [x] **75-ball US Bingo** — B(1-15), I(16-30), N(31-45), G(46-60), O(61-75)
-- [x] **5×5 grid** with FREE center cell (auto-marked)
+- [x] **5×5 grid** with FREE center cell (manually toggleable, starts unmarked)
 - [x] **Dual game modes:**
   - **Caller mode:** Central number input auto-marks all cards
   - **Card-only mode:** Click cells on individual cards to toggle
 - [x] **Win detection** — checks after every mark against active patterns
 - [x] **Winning cell highlight** — gold gradient + pulse animation
-- [x] **Game-over banner** — shows when any card wins
+- [x] **Win banner** — trophy banner showing which card won and which pattern
+- [x] **Game-over banner** — shows when all 75 numbers called with no winner
 
 ### Win Patterns (configurable via Settings)
 - [x] Single Line (horizontal, vertical, diagonal)
-- [x] Double Line
 - [x] Four Corners
-- [x] Postage Stamp (2×2 top-right corner)
-- [x] Letter X
-- [x] Letter L
-- [x] Letter T
-- [x] Frame (outer border)
-- [x] Blackout (all 25 cells)
+- [x] Postage Stamp (2×2 block in any corner)
+- [x] Letter X (both diagonals)
+- [x] Letter L (any full row + full column)
+- [x] Letter T (any full row + center column)
+- [x] Frame (all 16 outer border cells)
+- [x] Full House (all 25 cells)
+- [x] Multi-Line (2+ lines simultaneously)
+
+### Pattern-Aware Progress
+- [x] Each card tab shows the best-matching enabled pattern name + percentage
+- [x] Progress calculated per-pattern (not overall card fill)
+- [x] FREE cell excluded from all progress calculations
+- [x] Color-coded progress bar matching closeness to completion
 
 ### Number Calling & History
 - [x] **Caller input** — type number, press Enter to call
@@ -80,24 +93,28 @@ src/app/domains/bingo/
 - [x] **Auto-clear error messages** — 3-second timeout
 
 ### Card Management
-- [x] **Add cards** — generates valid random 75-ball cards
+- [x] **Add cards** — manual 5×5 grid entry with column validation
+- [x] **Add cards via OCR** — take/upload photo, auto-extract numbers, review before saving
+- [x] **Mobile camera support** — "Take Photo" button opens rear camera directly
+- [x] **Low-confidence flags** — orange cells flagged when OCR confidence <60% for review
 - [x] **Remove cards** — with active card auto-switching
 - [x] **Rename cards** — click title in accordion header to edit inline
 - [x] **Reset card** — clears all marks on a specific card (keeps numbers)
 - [x] **Edit mode** — toggle per card to edit individual cell numbers via inputs
   - Validates column ranges (B:1-15, I:16-30, etc.)
   - Commits on blur or Enter, reverts on Escape
-  - Blocks edit mode while game is in progress
-- [x] **Demo card** — auto-created on first launch with pre-marked cells
+- [x] **No demo card** — app starts completely empty on first launch
+
+### Session Management
+- [x] **Manual save** — "Save Session" button in header (only active when dirty)
+- [x] **Auto-save on tab close** — `beforeunload` handler saves if dirty
+- [x] **Dirty tracking** — signal tracks unsaved changes after any mutation
+- [x] **Clear dialog** — checkboxes for "Clear called numbers" and/or "Delete all cards"
+- [x] **Immediate persist after clear** — empty state saved to localStorage
 
 ### UI/UX
-- [x] **MatAccordion** — replaces tabs, shows card code + progress % in headers
-- [x] **Progress bars** — color-coded per completion:
-  - <25%: red
-  - 25-49%: orange
-  - 50-79%: green
-  - 80-99%: dark red
-  - 100%: green (all marked)
+- [x] **MatAccordion** — replaces tabs, shows card code + pattern name + progress % in headers
+- [x] **Pattern-specific progress bars** — each card shows distance to closest enabled pattern
 - [x] **View toggle** — switch between Caller view and Master Board view
 - [x] **Paper card aesthetic** — subtle texture, rounded corners, shadows
 - [x] **Light background** — `#f5f7fa` app background
@@ -106,8 +123,22 @@ src/app/domains/bingo/
 
 ### Persistence & State
 - [x] **localStorage** — cards, called numbers, game mode, settings, active card persisted
+- [x] **Manual persistence only** — no auto-save on mutation, only on explicit save or tab close
 - [x] **Signal-driven state** — all state via Angular signals
-- [x] **OnPush change detection** — with explicit CD triggers for entity mutations
+- [x] **OnPush change detection** — default in Angular 21 (zoneless)
+
+### OCR (Photo Recognition)
+- [x] **Tesseract.js integration** — browser-based WebAssembly OCR
+- [x] **Drag & drop upload** or click to browse
+- [x] **Mobile capture** — `capture="environment"` opens rear camera
+- [x] **Grid population** — OCR results auto-fill the manual entry grid
+- [x] **Low-confidence review** — cells <60% confidence flagged in orange
+- [x] **Self-clearing flags** — editing a cell removes its low-confidence flag
+
+### CI/CD & Documentation
+- [x] **GitHub Actions deploy workflow** — builds + deploys to GitHub Pages on push
+- [x] **SPA routing fallback** — 404.html copies index.html
+- [x] **README.md** — feature overview, tech stack, setup guide, DDD structure
 
 ### Quality
 - [x] **55 unit tests** passing (Vitest)
@@ -117,7 +148,7 @@ src/app/domains/bingo/
 ---
 
 ## Known Limitations
-- [ ] **Tesseract.js OCR** — `pnpm approve-builds` requires interactive terminal input (blocked)
+- [ ] **Tesseract.js first load** — downloads ~2MB language model from CDN on first use (cached after)
 - [ ] **OnPush workaround** — card component uses `effect` + `markForCheck()` on `calledNumbers` change (entity mutation in place)
 
 ---
@@ -138,7 +169,6 @@ src/app/domains/bingo/
 - [ ] **Score tracking** — track wins per player/card across multiple games
 
 ### Priority 3 — Advanced Features
-- [ ] **Tesseract.js OCR** — scan physical cards via camera/image upload
 - [ ] **Multiple card layouts** — support 3×3, 4×4, or custom grid sizes
 - [ ] **90-ball UK Bingo** — support Housie/Tambola rules
 - [ ] **Game statistics** — average calls to win, most common winning patterns
@@ -162,7 +192,6 @@ pnpm ng serve             # Dev server (Vite + esbuild, HMR)
 pnpm ng build             # Production build
 pnpm ng test              # Vitest (zoneless, fast)
 pnpm ng e2e               # Playwright e2e
-pnpm approve-builds       # Approve Tesseract.js native builds (interactive)
 ```
 
 ---
@@ -175,7 +204,7 @@ pnpm approve-builds       # Approve Tesseract.js native builds (interactive)
 4. **UI** — create or update components in `ui/` (signals, OnPush, `@if`/`@for`)
 5. **Page** — wire into `pages/bingo-game-page.component.ts` if route-level
 6. **Tests** — unit tests for domain + UI, e2e for critical flows
-7. **Verify** — `npx ng build` + `npx ng test --no-watch` must pass
+7. **Verify** — `pnpm ng build` + `pnpm ng test --no-watch` must pass
 
 ---
 
