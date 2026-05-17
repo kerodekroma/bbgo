@@ -86,7 +86,7 @@ import { BingoFacade } from '../../application/bingo.facade';
         <!-- Photo Upload Tab -->
         <mat-tab label="Photo Upload">
           <div class="photo-upload">
-            <p>Upload a photo of your bingo card to extract numbers.</p>
+            <p>Take a photo or upload an image of your bingo card to extract numbers.</p>
 
             <div
               class="drop-zone"
@@ -97,16 +97,26 @@ import { BingoFacade } from '../../application/bingo.facade';
             >
               @if (!selectedFile()) {
                 <div class="drop-content">
-                  <mat-icon class="upload-icon">cloud_upload</mat-icon>
-                  <p>Drag & drop an image here, or click to browse</p>
+                  <mat-icon class="upload-icon">{{ isMobile() ? 'photo_camera' : 'cloud_upload' }}</mat-icon>
+                  <p>{{ isMobile() ? 'Tap below to take a photo or choose an image' : 'Drag & drop an image here, or click to browse' }}</p>
                   <input
                     #fileInput
                     type="file"
                     accept="image/*"
+                    capture="environment"
                     (change)="onFileSelected($event)"
                     hidden
                   />
-                  <button mat-stroked-button (click)="fileInput.click()">Browse</button>
+                  <div class="photo-buttons">
+                    <button mat-stroked-button (click)="fileInput.click()">
+                      <mat-icon>photo_camera</mat-icon>
+                      Take Photo
+                    </button>
+                    <button mat-stroked-button (click)="fileInput.click(); $event.preventDefault()">
+                      <mat-icon>photo_library</mat-icon>
+                      Browse
+                    </button>
+                  </div>
                 </div>
               } @else {
                 <div class="file-selected">
@@ -193,6 +203,8 @@ import { BingoFacade } from '../../application/bingo.facade';
     }
     .drop-zone.dragging { border-color: var(--bingo-header-bg); background: rgba(211, 47, 47, 0.05); }
     .upload-icon { font-size: 48px; width: 48px; height: 48px; color: #999; }
+    .photo-buttons { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+    .photo-buttons button { display: flex; align-items: center; gap: 4px; }
     .file-selected { display: flex; align-items: center; justify-content: center; gap: 8px; }
     .process-btn { width: 100%; }
     .processing { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
@@ -215,6 +227,10 @@ export class AddCardDialogComponent {
   protected readonly isDragging = signal(false);
   protected readonly lowConfidenceCells = signal<Set<string>>(new Set());
   protected readonly ocrConfidence = signal<number | null>(null);
+  /** Detect touch-capable devices to adapt the UI for mobile */
+  protected isMobile(): boolean {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }
 
   protected getMin(col: number): number {
     return COLUMN_RANGES[COLUMNS[col]!].min;
