@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # ── Generate version.ts from git tags ──
-# Outputs something like:
-#   "1.0.0"          — on an exact tag
+# Outputs:
+#   "1.0.0"          — on an exact v1.0.0 tag
 #   "1.0.0+3"        — 3 commits after v1.0.0
-#   "gabc1234"       — no tags at all (fallback to commit hash)
+#   "0.0.0"          — no tags at all (clean fallback)
 set -euo pipefail
 
 OUTPUT="src/app/shared/lib/version.ts"
 
-# Try git describe: prefers annotated tags, falls back to short hash
-if VERSION=$(git describe --tags --match 'v*' --always --dirty 2>/dev/null); then
-  # Strip leading 'v' if present
+# Try to get the nearest v* tag, with distance if not exact
+if VERSION=$(git describe --tags --match 'v*' --dirty 2>/dev/null); then
+  # Strip leading 'v' — e.g., v1.0.0 → 1.0.0, v1.0.0-3-gabc → 1.0.0+3
   VERSION="${VERSION#v}"
+  # Convert git describe format: 1.0.0-3-gabc1234 → 1.0.0+3
+  VERSION="$(printf '%s' "$VERSION" | sed 's/-g[0-9a-f]\{7,\}$//; s/-/+/')"
 else
-  # Ultimate fallback
   VERSION="0.0.0"
 fi
 
