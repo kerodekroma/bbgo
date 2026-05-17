@@ -199,6 +199,11 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
       font-size: 0.8rem;
       color: #999;
     }
+    @media (max-width: 520px) {
+      .caller-controls { flex-direction: column; align-items: stretch; gap: 8px; }
+      .caller-input-area { min-width: 0; }
+      .caller-actions { justify-content: space-between; }
+    }
   `],
 })
 export class NumberCallerComponent {

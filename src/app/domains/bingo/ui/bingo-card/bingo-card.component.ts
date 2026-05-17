@@ -196,11 +196,20 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
       0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.6); }
       50% { box-shadow: 0 0 0 6px rgba(255, 215, 0, 0.2); }
     }
-    @media (max-width: 480px) {
-      .bingo-card { max-width: 100%; padding: 4px; }
-      .bingo-header-cell { font-size: 1.2rem; padding: 4px 0; }
-      .bingo-cell { min-width: 36px; min-height: 36px; font-size: 0.9rem; }
+    @media (max-width: 520px) {
+      .bingo-card { max-width: 100%; padding: 6px; }
+      .bingo-header-cell { font-size: 1.2rem; padding: 6px 0; border-radius: 4px; }
+      .bingo-cell { min-width: 44px; min-height: 44px; font-size: 0.95rem; }
       .cell-number { font-size: 1rem; }
+    }
+    @media (max-width: 380px) {
+      .bingo-card { padding: 3px; gap: 2px; }
+      .bingo-header { gap: 2px; }
+      .bingo-row { gap: 1px; }
+      .bingo-header-cell { font-size: 1rem; padding: 3px 0; min-width: 0; }
+      .bingo-cell { min-width: 32px; min-height: 32px; font-size: 0.8rem; border-width: 1px; border-radius: 3px; }
+      .cell-number { font-size: 0.85rem; }
+      .free-text { font-size: 0.6rem; }
     }
   `],
 })

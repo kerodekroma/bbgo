@@ -290,6 +290,21 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
       width: 100%;
       margin-top: 4px;
     }
+    @media (max-width: 520px) {
+      .panel-description { gap: 4px; }
+      .card-pattern-label { max-width: 60px; font-size: 0.65rem; }
+      .card-percentage { font-size: 0.75rem; min-width: 24px; }
+      .card-progress { min-width: 50px; height: 6px; }
+      .card-panel ::ng-deep .mat-expansion-panel-header { min-height: 48px !important; padding: 0 12px; }
+      .panel-title { font-size: 0.85rem; }
+    }
+    @media (max-width: 380px) {
+      .card-panel ::ng-deep .mat-expansion-panel-header { min-height: 40px !important; padding: 0 8px; }
+      .panel-title { font-size: 0.8rem; }
+      .card-pattern-label { max-width: 40px; font-size: 0.6rem; }
+      .card-percentage { font-size: 0.7rem; min-width: 20px; }
+      .card-progress { min-width: 36px; height: 5px; }
+    }
   `],
 })
 export class CardTabsComponent {

@@ -211,13 +211,20 @@ interface WinEntry {
       from { transform: translateY(-20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    @media (max-width: 480px) {
-      .game-page { padding: 8px; }
-      .game-title { font-size: 1.2rem; letter-spacing: 2px; }
+    @media (max-width: 520px) {
+      .game-title { font-size: 1.3rem; letter-spacing: 2px; gap: 4px; }
       .title-icon { font-size: 24px; width: 24px; height: 24px; }
+      .version-badge { font-size: 0.55rem; margin-bottom: 2px; }
       .save-btn-label { display: none; }
-      .save-btn { min-width: 36px; padding: 0 8px; }
+      .save-btn { min-width: 36px; padding: 0 8px; border-radius: 50%; }
       .save-btn-icon { margin-right: 0; }
+      .header-actions { gap: 2px; }
+    }
+    @media (max-width: 380px) {
+      .game-title { font-size: 1.0rem; letter-spacing: 1px; }
+      .title-icon { font-size: 20px; width: 20px; height: 20px; }
+      .game-header { gap: 4px; }
+      .game-page { padding: 6px; }
     }
   `],
 })

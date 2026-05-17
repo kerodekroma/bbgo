@@ -235,6 +235,16 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
     .processing-text { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: #666; }
     .processing-icon { font-size: 18px; width: 18px; height: 18px; }
     .cancel-ocr-btn { font-size: 0.8rem; }
+    @media (max-width: 480px) {
+      .grid-header { gap: 2px; }
+      .grid-row { gap: 2px; }
+      .header-cell { font-size: 1rem; padding: 2px; }
+      .grid-cell-input { padding: 6px 2px; font-size: 0.85rem; }
+      .free-cell { font-size: 0.65rem; padding: 6px 2px; }
+      .drop-zone { padding: 20px 12px; }
+      .upload-icon { font-size: 36px; width: 36px; height: 36px; }
+      .manual-entry { padding: 8px 0; }
+    }
   `],
 })
 export class AddCardDialogComponent {
