@@ -36,7 +36,10 @@ const MAX_CELL_ASPECT_DEVIATION = 2.5;
 interface PreprocessedImage {
   blob: Blob;
   imageData: ImageData;
+  /** Binary (thresholded) canvas — used for grid detection */
   canvas: HTMLCanvasElement;
+  /** Grayscale canvas — used for cell extraction (Tesseract works better with grayscale) */
+  grayCanvas: HTMLCanvasElement;
   width: number;
   height: number;
 }
@@ -237,6 +240,7 @@ function preprocessImage(file: File): Promise<PreprocessedImage> {
       const cy = crop?.y ?? 0;
       const cw = crop?.w ?? srcW;
       const ch = crop?.h ?? srcH;
+      console.log('OCR DEBUG: autoCrop result:', crop ? `(${crop.x},${crop.y}) ${crop.w}x${crop.h}` : 'null (using full: ' + cx + ',' + cy + ' ' + cw + 'x' + ch + ')');
 
       // Step 3: Create final canvas with cropped content
       const canvas = document.createElement('canvas');
@@ -259,18 +263,50 @@ function preprocessImage(file: File): Promise<PreprocessedImage> {
         grayData.data[i + 2] = g;
       }
 
+      // Save grayscale image data and create a grayscale canvas for OCR
+      const grayCanvas = document.createElement('canvas');
+      grayCanvas.width = cw;
+      grayCanvas.height = ch;
+      const grayCtx = grayCanvas.getContext('2d')!;
+      grayCtx.putImageData(grayData, 0, 0);
+
+      // Apply mild sharpening to grayscale to make digits stand out
+      // (simple 3x3 unsharp mask kernel)
+      const grayPixels = grayCtx.getImageData(0, 0, cw, ch);
+      const sharpened = new Uint8ClampedArray(grayPixels.data);
+      for (let y = 1; y < ch - 1; y++) {
+        for (let x = 1; x < cw - 1; x++) {
+          const idx = (y * cw + x) * 4;
+          const center = grayPixels.data[idx]!;
+          // 3x3 kernel: [0,-1,0; -1,5,-1; 0,-1,0] (unsharp mask)
+          const sum = 5 * center
+            - grayPixels.data[((y-1)*cw + x)*4]!
+            - grayPixels.data[((y+1)*cw + x)*4]!
+            - grayPixels.data[(y*cw + x-1)*4]!
+            - grayPixels.data[(y*cw + x+1)*4]!;
+          const v = Math.max(0, Math.min(255, sum));
+          sharpened[idx] = v;
+          sharpened[idx+1] = v;
+          sharpened[idx+2] = v;
+        }
+      }
+      const sharpenedData = new ImageData(sharpened, cw, ch);
+      grayCtx.putImageData(sharpenedData, 0, 0);
+      // Update grayData reference for subsequent processing
+      grayData = sharpenedData;
+
       // Apply adaptive threshold — kernel proportional to image size
-      const kernelSize = Math.max(15, Math.round(Math.min(cw, ch) / 25));
-      const offset = 20;
+      const kernelSize = Math.max(15, Math.round(Math.min(cw, ch) / 20));
+      const offset = 30;
       const binaryData = adaptiveThreshold(grayData, cw, ch, kernelSize, offset);
 
-      // Write binary back to canvas
+      // Write binary back to canvas (for grid detection)
       ctx.putImageData(binaryData, 0, 0);
 
       canvas.toBlob(
         blob => {
           if (blob) {
-            resolve({ blob, imageData: binaryData, canvas, width: cw, height: ch });
+            resolve({ blob, imageData: binaryData, canvas, grayCanvas, width: cw, height: ch });
           } else {
             reject(new Error('Canvas toBlob failed'));
           }
@@ -498,45 +534,28 @@ function detectGridFromContent(
   }
 
   // Mask outer margins so minima detection only searches the card body.
-  // Cards often have header (BINGO), footer text, or borders that create
-  // extra peaks — restricting to the central ~70% avoids these.
-  const searchMargin = Math.round(height * 0.15);
+  // Use a small margin (5%) to only strip edge artifacts — too much causes
+  // the margin area to be treated as a band, distorting row detection.
+  const searchMargin = Math.round(height * 0.05);
   for (let y = 0; y < searchMargin; y++) smoothedR[y] = 1;
   for (let y = height - searchMargin; y < height; y++) smoothedR[y] = 1;
 
-  // Find row band boundaries via local minima (gaps between number rows)
-  // We search for 6 bands (BINGO header + 5 number rows), then merge
-  // the smallest band into an adjacent one to get exactly 5 number rows.
-  const rowBands6 = findPeakBoundaries(smoothedR, 6, height);
-  if (!rowBands6 || rowBands6.length !== 7) return null;
-
-  // Merge the two most closely-spaced consecutive bands.
-  // The BINGO header is typically the thinnest band, so merging it
-  // with the first number row gives us the 5 number rows we need.
-  let minGap = Infinity;
-  let mergeIdx = -1;
-  for (let i = 1; i < rowBands6.length; i++) {
-    const gap = rowBands6[i]! - rowBands6[i - 1]!;
-    if (gap < minGap) {
-      minGap = gap;
-      mergeIdx = i;
-    }
-  }
-  if (mergeIdx < 0) return null;
-
-  // Remove the boundary at mergeIdx to merge the two adjacent bands
-  const rowBands = rowBands6.filter((_, i) => i !== mergeIdx);
-  if (rowBands.length !== 6) return null;
+  // Find row band boundaries via local minima (gaps between number rows).
+  // We search for 5 bands directly (just the 5 number rows).
+  // The BINGO header is typically thin and sits above the first number row;
+  // it will be absorbed into the first band if it falls above the first valley.
+  const rowBands = findPeakBoundaries(smoothedR, 5, height);
   if (!rowBands || rowBands.length !== 6) return null;
 
   // ── Vertical projection per row band ──
   // We average column gaps across all 5 row bands for stability
   const allColGaps: number[][] = [[], [], [], []]; // 4 gaps between 5 columns
+  const rowDebug: string[] = [];
 
   for (let ri = 0; ri < 5; ri++) {
     const yTop = rowBands[ri]!;
     const yBot = rowBands[ri + 1]!;
-    if (yBot - yTop < 5) continue;
+    if (yBot - yTop < 5) { rowDebug.push(`row${ri}:skip(thin=${yBot-yTop})`); continue; }
 
     const colProfile = new Uint32Array(width);
     for (let y = yTop; y < yBot; y++) {
@@ -563,7 +582,16 @@ function detectGridFromContent(
     }
 
     const colBands = findPeakBoundaries(smoothedC, 5, width);
-    if (!colBands || colBands.length !== 6) continue;
+    if (!colBands || colBands.length !== 6) {
+      // DEBUG: sample column profile values
+      const colSamples = [];
+      for (let x = 0; x < width; x += Math.round(width/12)) {
+        colSamples.push(`x=${x}:${Math.round(smoothedC[x]!)}`);
+      }
+      rowDebug.push(`row${ri}(y=${yTop}-${yBot}):col_fail [profile:${colSamples.join(',')}]`);
+      continue;
+    }
+    rowDebug.push(`row${ri}(y=${yTop}-${yBot}):cols=${colBands.join(',')}`);
 
     // Record the 4 internal gap positions
     for (let ci = 0; ci < 4; ci++) {
@@ -571,15 +599,44 @@ function detectGridFromContent(
     }
   }
 
-  // Average column gaps across rows
+  console.log('OCR DEBUG: column detection per-row:', rowDebug.join(' | '));
+  console.log('OCR DEBUG: allColGaps:', allColGaps.map((g,i) => `gap${i}:${g.join(',')}`).join(' | '));
+
+  // Average column gaps across rows (if we got enough measurements)
   const avgColGaps: number[] = [];
-  for (const gaps of allColGaps) {
-    if (gaps.length < 2) return null; // need at least 2 rows to agree
-    avgColGaps.push(Math.round(gaps.reduce((s, v) => s + v, 0) / gaps.length));
+  for (let gi = 0; gi < allColGaps.length; gi++) {
+    const gaps = allColGaps[gi]!;
+    if (gaps.length >= 2) {
+      avgColGaps.push(Math.round(gaps.reduce((s, v) => s + v, 0) / gaps.length));
+    }
   }
 
-  // Build 6 grid lines: [0, colGap0, colGap1, colGap2, colGap3, width]
-  const cols: number[] = [0, ...avgColGaps, width];
+  let cols: number[] | null = null;
+
+  if (avgColGaps.length === 4) {
+    // All 4 gaps were measured — use them
+    cols = [0, ...avgColGaps, width];
+    console.log('OCR DEBUG: cols from per-row avg:', cols.join(','));
+  }
+
+  // Validate detected columns: each column must be a reasonable width.
+  // For a 5-column grid, min ~10% and max ~50% of total width.
+  if (cols) {
+    const colWidths = cols.slice(1).map((c, i) => c - cols![i]!);
+    const tooSmall = colWidths.some(w => w < width * 0.06);
+    const tooLarge = colWidths.some(w => w > width * 0.45);
+    if (tooSmall || tooLarge) {
+      console.log('OCR DEBUG: rejecting cols — uneven column widths:', colWidths.join(','));
+      cols = null;
+    }
+  }
+
+  // Fallback: equal-width columns (reliable for standard bingo cards)
+  if (!cols) {
+    const cellW = Math.round(width / 5);
+    cols = [0, cellW, cellW * 2, cellW * 3, cellW * 4, width];
+    console.log('OCR DEBUG: cols from equal division:', cols.join(','));
+  }
 
   return { rows: rowBands, cols };
 }
@@ -668,8 +725,8 @@ function extractCellBlob(
 ): Promise<Blob> {
   const cellW = grid.cols[col + 1]! - grid.cols[col]!;
   const cellH = grid.rows[row + 1]! - grid.rows[row]!;
-  const marginX = Math.max(2, Math.round(cellW * 0.12));
-  const marginY = Math.max(2, Math.round(cellH * 0.12));
+  const marginX = Math.max(3, Math.round(cellW * 0.15));
+  const marginY = Math.max(3, Math.round(cellH * 0.15));
 
   const x = grid.cols[col]! + marginX;
   const y = grid.rows[row]! + marginY;
@@ -699,8 +756,7 @@ function extractCellBlob(
         if (blob) resolve(blob);
         else reject(new Error('Failed to create cell blob'));
       },
-      'image/jpeg',
-      0.92,
+      'image/png',
     );
   });
 }
@@ -742,6 +798,17 @@ export class OcrService implements OnDestroy {
       checkAborted();
       onProgress?.(15);
 
+      console.log('OCR DEBUG: after preprocess', preprocessed.width, 'x', preprocessed.height);
+      // Sample binary pixels to check preprocessing quality
+      const d = preprocessed.imageData.data;
+      let blackPx = 0, whitePx = 0;
+      const sample = [];
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i]! < 128) blackPx++; else whitePx++;
+        if (sample.length < 30 && i % 10000 < 4) sample.push(d[i]);
+      }
+      console.log('OCR DEBUG: binary pixel stats:', { black: blackPx, white: whitePx, total: d.length/4, ratio: Math.round(blackPx/(d.length/4)*100) + '%', samples: sample.slice(0,10).join(',') });
+
       // ── 2. Try grid-line projection (cards with visible borders) ──
       let grid = detectGridLines(
         preprocessed.imageData,
@@ -749,10 +816,12 @@ export class OcrService implements OnDestroy {
         preprocessed.height,
       );
 
+      console.log('OCR DEBUG: detectGridLines result:', grid ? `rows=${grid.rows.length} cols=${grid.cols.length}` : 'null');
       if (grid) {
-        // Grid detected → cell-by-cell OCR
+        console.log('OCR DEBUG: grid rows:', grid.rows.join(','));
+        console.log('OCR DEBUG: grid cols:', grid.cols.join(','));
         return await this.processGridCells(
-          preprocessed.canvas,
+          preprocessed.grayCanvas,
           grid,
           checkAborted,
           onProgress,
@@ -760,8 +829,6 @@ export class OcrService implements OnDestroy {
       }
 
       // ── 3. Try content-based grid detection (borderless cards) ──
-      // When there are no visible grid lines, find boundaries from
-      // where the numbers sit.
       grid = detectGridFromContent(
         preprocessed.imageData,
         preprocessed.width,
@@ -769,21 +836,29 @@ export class OcrService implements OnDestroy {
       );
 
       if (grid) {
+        console.log('OCR DEBUG: content rows:', grid.rows.join(','));
+        console.log('OCR DEBUG: content cols:', grid.cols.join(','));
         onProgress?.(18);
         return await this.processGridCells(
-          preprocessed.canvas,
+          preprocessed.grayCanvas,
           grid,
           checkAborted,
           onProgress,
         );
       }
 
-      // ── 4. Fallback: whole-image OCR ──
+      // ── 4. Equal-grid fallback — assume a standard 5×5 card ──
+      // When neither line nor content detection works, use equal division.
+      // This is reliable because bingo cards always have 5 rows and 5 columns.
+      const cellW = Math.round(preprocessed.width / 5);
+      const cellH = Math.round(preprocessed.height / 5);
+      const eqRows = [0, cellH, cellH*2, cellH*3, cellH*4, preprocessed.height];
+      const eqCols = [0, cellW, cellW*2, cellW*3, cellW*4, preprocessed.width];
+      console.log('OCR DEBUG: equal-grid fallback: rows=' + eqRows.join(',') + ' cols=' + eqCols.join(','));
       onProgress?.(20);
-      return await this.processWholeImage(
-        preprocessed.canvas,
-        preprocessed.width,
-        preprocessed.height,
+      return await this.processGridCells(
+        preprocessed.grayCanvas,
+        { rows: eqRows, cols: eqCols },
         checkAborted,
         onProgress,
       );
@@ -947,202 +1022,4 @@ export class OcrService implements OnDestroy {
 
   // ── Whole-image fallback OCR ──
 
-  /**
-   * Fallback path: OCR the entire preprocessed image at once, then
-   * use word bounding box coordinates to build the 5×5 grid.
-   * This is the original approach.
-   */
-  private async processWholeImage(
-    sourceCanvas: HTMLCanvasElement,
-    width: number,
-    height: number,
-    checkAborted: () => void,
-    onProgress?: (progress: number) => void,
-  ): Promise<OcrResult> {
-    checkAborted();
-
-    // ── Mask out the center (FREE) cell ──
-    // Control codes, logos, or background patterns in the FREE space
-    // (row 2, col 2) create noise that confuses whole-image OCR.
-    // We paint white over the center ~20% region.
-    const maskedCanvas = document.createElement('canvas');
-    maskedCanvas.width = width;
-    maskedCanvas.height = height;
-    const maskedCtx = maskedCanvas.getContext('2d')!;
-    maskedCtx.drawImage(sourceCanvas, 0, 0);
-    const centerLeft = Math.round(width * 0.38);
-    const centerRight = Math.round(width * 0.62);
-    const centerTop = Math.round(height * 0.38);
-    const centerBottom = Math.round(height * 0.62);
-    maskedCtx.fillStyle = '#ffffff';
-    maskedCtx.fillRect(centerLeft, centerTop, centerRight - centerLeft, centerBottom - centerTop);
-
-    const maskedBlob = await new Promise<Blob>((resolve, reject) => {
-      maskedCanvas.toBlob(b => {
-        if (b) resolve(b);
-        else reject(new Error('Failed to create masked blob'));
-      }, 'image/jpeg', 0.92);
-    });
-    checkAborted();
-
-    const worker = await createWorker('eng', undefined, {
-      logger: (m: LoggerMessage) => {
-        if (m.status === 'recognizing text') {
-          onProgress?.(20 + Math.round(m.progress * 70));
-        }
-      },
-    });
-    this.currentJob!.worker = worker;
-    this.currentJob!.workerPromise = Promise.resolve(worker);
-    checkAborted();
-
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-      tessedit_char_whitelist: '0123456789',
-    });
-
-    const { data } = await worker.recognize(maskedBlob);
-    checkAborted();
-    onProgress?.(92);
-
-    const words = data.words ?? [];
-    const cells = this.parseWordsToGrid(words);
-    onProgress?.(95);
-
-    const avgConfidence =
-      words.length > 0
-        ? Math.round(
-            words.reduce((sum, w) => sum + (w.confidence ?? 0), 0) /
-              words.length,
-          )
-        : 0;
-
-    const lowConfidenceCells: Array<{
-      row: number;
-      col: number;
-      confidence: number;
-    }> = [];
-
-    for (const word of words) {
-      const num = parseInt(word.text, 10);
-      if (num >= 1 && num <= 75 && (word.confidence ?? 0) < 60) {
-        const pos = this.findGridPosition(cells, num);
-        if (pos) {
-          lowConfidenceCells.push({
-            row: pos.row,
-            col: pos.col,
-            confidence: Math.round(word.confidence ?? 0),
-          });
-        }
-      }
-    }
-
-    onProgress?.(100);
-    return { cells, confidence: avgConfidence, lowConfidenceCells };
-  }
-
-  // ── Spatial grid builder (fallback) ──
-
-  /**
-   * Build a 5×5 grid using word bounding box coordinates.
-   * Groups recognized words into 5 rows by y-position,
-   * then sorts each row into 5 columns by x-position.
-   */
-  private parseWordsToGrid(
-    words: Array<{
-      text: string;
-      confidence?: number;
-      block_num?: number;
-      line_num?: number;
-      word_num?: number;
-      x_min?: number;
-      y_min?: number;
-      x_max?: number;
-      y_max?: number;
-    }>,
-  ): GridCell[][] {
-    const valid = words
-      .map(w => ({ ...w, num: parseInt(w.text, 10) }))
-      .filter(w => !isNaN(w.num) && w.num >= 1 && w.num <= 75);
-
-    if (valid.length === 0) {
-      return Array.from({ length: 5 }, (_, row) =>
-        Array.from({ length: 5 }, (_, col) =>
-          createGridCell(row, col, null, row === 2 && col === 2),
-        ),
-      );
-    }
-
-    const sortedByY = [...valid].sort(
-      (a, b) => (a.y_min ?? 0) - (b.y_min ?? 0),
-    );
-
-    const rows: typeof sortedByY[] = [];
-    const rowHeight = Math.max(
-      (sortedByY[sortedByY.length - 1]!.y_max ?? 0) -
-        (sortedByY[0]!.y_min ?? 0),
-      1,
-    ) / 5;
-
-    for (const word of sortedByY) {
-      const yCenter = ((word.y_min ?? 0) + (word.y_max ?? 0)) / 2;
-      const rowIdx = Math.min(
-        Math.floor(
-          (yCenter - (sortedByY[0]!.y_min ?? 0)) / rowHeight,
-        ),
-        4,
-      );
-      if (!rows[rowIdx]) rows[rowIdx] = [];
-      rows[rowIdx]!.push(word);
-    }
-
-    const grid: GridCell[][] = [];
-    for (let row = 0; row < 5; row++) {
-      const rowWords = (rows[row] ?? []).sort(
-        (a, b) => (a.x_min ?? 0) - (b.x_min ?? 0),
-      );
-
-      const rowCells: GridCell[] = [];
-      for (let col = 0; col < 5; col++) {
-        const isFree = row === 2 && col === 2;
-        if (isFree) {
-          rowCells.push(createGridCell(row, col, null, true));
-          continue;
-        }
-        const word = rowWords[col];
-        if (word && word.num >= 1 && word.num <= 75) {
-          const column = getColumnForNumber(word.num) as BingoColumn | null;
-          rowCells.push(
-            createGridCell(
-              row,
-              col,
-              column ? { value: word.num, column } : null,
-              false,
-            ),
-          );
-        } else {
-          rowCells.push(createGridCell(row, col, null, false));
-        }
-      }
-      grid.push(rowCells);
-    }
-
-    return grid;
-  }
-
-  /** Find which grid cell (row,col) contains a given number */
-  private findGridPosition(
-    grid: GridCell[][],
-    num: number,
-  ): { row: number; col: number } | null {
-    for (let row = 0; row < grid.length; row++) {
-      for (let col = 0; col < (grid[row]?.length ?? 0); col++) {
-        const cell = grid[row]![col]!;
-        if (!cell.isFree && cell.number?.value === num) {
-          return { row, col };
-        }
-      }
-    }
-    return null;
-  }
 }
