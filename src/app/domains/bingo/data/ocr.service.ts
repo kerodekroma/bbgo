@@ -42,9 +42,87 @@ interface PreprocessedImage {
 }
 
 /**
- * Load a file into an offscreen canvas, resize, grayscale + contrast.
- * Returns the processed blob (for OCR), ImageData (for grid detection),
- * and canvas (for cell extraction).
+ * Adaptive threshold using integral image (summed-area table).
+ * Converts grayscale to binary: each pixel is black (0) if it is
+ * darker than the local mean minus `offset`, otherwise white (255).
+ *
+ * This handles uneven lighting (gloss/reflections) because the
+ * threshold adapts to local brightness — a glossy spot on the
+ * card won't wash out the numbers.
+ */
+function adaptiveThreshold(
+  imageData: ImageData,
+  width: number,
+  height: number,
+  kernelSize: number,
+  offset: number,
+): ImageData {
+  const data = imageData.data;
+
+  // Convert to grayscale if not already
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = Math.round(
+      data[i]! * 0.299 + data[i + 1]! * 0.587 + data[i + 2]! * 0.114,
+    );
+    data[i] = gray;
+    data[i + 1] = gray;
+    data[i + 2] = gray;
+  }
+
+  // Build integral image for O(1) local mean lookup
+  const integral = new Float64Array((width + 1) * (height + 1));
+  for (let y = 1; y <= height; y++) {
+    const rowPrev = (y - 1) * (width + 1);
+    const rowCurr = y * (width + 1);
+    for (let x = 1, pixelBase = (y - 1) * width; x <= width; x++) {
+      const pixelIdx = (pixelBase + x - 1) * 4;
+      integral[rowCurr + x] =
+        data[pixelIdx]! +
+        integral[rowCurr + x - 1]! +
+        integral[rowPrev + x]! -
+        integral[rowPrev + x - 1]!;
+    }
+  }
+
+  const halfK = Math.floor(kernelSize / 2);
+  const output = new Uint8ClampedArray(data.length);
+
+  for (let y = 0; y < height; y++) {
+    const y1 = Math.max(0, y - halfK);
+    const y2 = Math.min(height - 1, y + halfK);
+    const rowH = y2 - y1 + 1;
+
+    for (let x = 0; x < width; x++) {
+      const x1 = Math.max(0, x - halfK);
+      const x2 = Math.min(width - 1, x + halfK);
+      const area = rowH * (x2 - x1 + 1);
+
+      // Sum from integral image
+      const sum =
+        integral[(y2 + 1) * (width + 1) + (x2 + 1)]! -
+        integral[y1 * (width + 1) + (x2 + 1)]! -
+        integral[(y2 + 1) * (width + 1) + x1]! +
+        integral[y1 * (width + 1) + x1]!;
+
+      const mean = sum / area;
+      const pixelIdx = (y * width + x) * 4;
+      const pixel = data[pixelIdx]!;
+
+      const result = pixel < mean - offset ? 0 : 255;
+      output[pixelIdx] = result;
+      output[pixelIdx + 1] = result;
+      output[pixelIdx + 2] = result;
+      output[pixelIdx + 3] = 255;
+    }
+  }
+
+  return new ImageData(output, width, height);
+}
+
+/**
+ * Load a file into an offscreen canvas, resize, adaptive threshold.
+ * Returns the binary blob (for OCR), binary ImageData (for grid detection),
+ * and binary canvas (for cell extraction).
  */
 function preprocessImage(file: File): Promise<PreprocessedImage> {
   return new Promise((resolve, reject) => {
@@ -63,40 +141,21 @@ function preprocessImage(file: File): Promise<PreprocessedImage> {
       // Draw scaled image
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Apply grayscale + contrast
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        const gray = Math.round(
-          data[i]! * 0.299 + data[i + 1]! * 0.587 + data[i + 2]! * 0.114,
-        );
-        const contrast = 1.5;
-        const adjusted = Math.round(128 + (gray - 128) * contrast);
-        const clamped = Math.max(0, Math.min(255, adjusted));
-        data[i] = clamped;
-        data[i + 1] = clamped;
-        data[i + 2] = clamped;
-      }
-      ctx.putImageData(imageData, 0, 0);
+      // Get grayscale ImageData
+      const grayData = ctx.getImageData(0, 0, width, height);
 
-      // For grid detection: add a second pass with adaptive threshold
-      // to make grid lines vs background more distinct
-      const enhancedData = ctx.getImageData(0, 0, width, height);
-      const eData = enhancedData.data;
-      for (let i = 0; i < eData.length; i += 4) {
-        // Stronger contrast stretch for binary-like separation
-        const v = eData[i]!;
-        // Push values toward extremes: <128 → darker, >128 → lighter
-        const stretched = v < 128 ? Math.max(0, v - 30) : Math.min(255, v + 30);
-        eData[i] = stretched;
-        eData[i + 1] = stretched;
-        eData[i + 2] = stretched;
-      }
+      // Apply adaptive threshold — handles glossy reflections
+      // Kernel ~1/40th of the image width (i.e. ~30px at 1200px),
+      // offset 20 means pixel must be 20+ shades darker than local mean
+      const binaryData = adaptiveThreshold(grayData, width, height, 31, 20);
+
+      // Write binary back to canvas (used for cell extraction + blob)
+      ctx.putImageData(binaryData, 0, 0);
 
       canvas.toBlob(
         blob => {
           if (blob) {
-            resolve({ blob, imageData: enhancedData, canvas, width, height });
+            resolve({ blob, imageData: binaryData, canvas, width, height });
           } else {
             reject(new Error('Canvas toBlob failed'));
           }
@@ -276,6 +335,166 @@ function validateGridSpacing(lines: number[], imageDim: number): boolean {
   return true;
 }
 
+// ── Content-based grid detection (for borderless cards) ──
+
+/**
+ * Detect grid boundaries by finding where numbers sit, not grid lines.
+ *
+ * For borderless cards without visible grid lines, this computes a
+ * horizontal projection profile (dark pixels per row), finds the 5
+ * horizontal bands where numbers sit, then within each band finds
+ * the 5 vertical bands where column numbers sit.
+ *
+ * Works because even without borders, the numbers are arranged in a
+ * regular 5×5 grid with gaps between them.
+ */
+function detectGridFromContent(
+  imageData: ImageData,
+  width: number,
+  height: number,
+): { rows: number[]; cols: number[] } | null {
+  const data = imageData.data;
+
+  // ── Horizontal projection (dark pixels per row) ──
+  const rowProfile = new Uint32Array(height);
+  for (let y = 0; y < height; y++) {
+    let darkCount = 0;
+    const base = y * width * 4;
+    for (let x = 0; x < width; x++) {
+      if (data[base + x * 4]! < 50) darkCount++;
+    }
+    rowProfile[y] = darkCount;
+  }
+
+  // Smooth profile with a 5-wide box filter
+  const smoothedR = new Float64Array(height);
+  for (let y = 0; y < height; y++) {
+    let sum = 0;
+    let count = 0;
+    for (let dy = -2; dy <= 2; dy++) {
+      const yy = y + dy;
+      if (yy >= 0 && yy < height) {
+        sum += rowProfile[yy]!;
+        count++;
+      }
+    }
+    smoothedR[y] = sum / count;
+  }
+
+  // Find row band boundaries via local minima (gaps between number rows)
+  const rowBands = findPeakBoundaries(smoothedR, 5, height);
+  if (!rowBands || rowBands.length !== 6) return null;
+
+  // ── Vertical projection per row band ──
+  // We average column gaps across all 5 row bands for stability
+  const allColGaps: number[][] = [[], [], [], []]; // 4 gaps between 5 columns
+
+  for (let ri = 0; ri < 5; ri++) {
+    const yTop = rowBands[ri]!;
+    const yBot = rowBands[ri + 1]!;
+    if (yBot - yTop < 5) continue;
+
+    const colProfile = new Uint32Array(width);
+    for (let y = yTop; y < yBot; y++) {
+      const base = y * width * 4;
+      for (let x = 0; x < width; x++) {
+        if (data[base + x * 4]! < 50) colProfile[x] = (colProfile[x] ?? 0) + 1;
+      }
+    }
+
+    // Smooth col profile
+    const smoothedC = new Float64Array(width);
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+      for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx;
+        if (xx >= 0 && xx < width) {
+          sum += colProfile[xx]!;
+          count++;
+        }
+      }
+      smoothedC[x] = sum / count;
+    }
+
+    const colBands = findPeakBoundaries(smoothedC, 5, width);
+    if (!colBands || colBands.length !== 6) continue;
+
+    // Record the 4 internal gap positions
+    for (let ci = 0; ci < 4; ci++) {
+      allColGaps[ci]!.push(colBands[ci + 1]!);
+    }
+  }
+
+  // Average column gaps across rows
+  const avgColGaps: number[] = [];
+  for (const gaps of allColGaps) {
+    if (gaps.length < 2) return null; // need at least 2 rows to agree
+    avgColGaps.push(Math.round(gaps.reduce((s, v) => s + v, 0) / gaps.length));
+  }
+
+  // Build 6 grid lines: [0, colGap0, colGap1, colGap2, colGap3, width]
+  const cols: number[] = [0, ...avgColGaps, width];
+
+  return { rows: rowBands, cols };
+}
+
+/**
+ * Find `numPeaks` number of bands in a 1D projection profile.
+ *
+ * Strategy: find the deepest local minima (valleys) to separate
+ * the peaks. Returns numPeaks+1 boundary positions, or null if
+ * the profile doesn't have enough structure.
+ */
+function findPeakBoundaries(
+  profile: Float64Array,
+  numPeaks: number,
+  imageDim: number,
+): number[] | null {
+  const expectedGap = imageDim / numPeaks;
+  const minSepar = Math.round(expectedGap * 0.3);
+  const maxSepar = Math.round(expectedGap * 2.5);
+
+  // Find all local minima
+  const minima: Array<{ pos: number; depth: number }> = [];
+  for (let i = 2; i < profile.length - 2; i++) {
+    if (
+      profile[i]! <= profile[i - 1]! &&
+      profile[i]! <= profile[i - 2]! &&
+      profile[i]! <= profile[i + 1]! &&
+      profile[i]! <= profile[i + 2]!
+    ) {
+      // Depth = how much lower this is than the surrounding peaks
+      const leftMax = Math.max(profile[i - 2]!, profile[i - 1]!);
+      const rightMax = Math.max(profile[i + 1]!, profile[i + 2]!);
+      const depth = Math.min(leftMax, rightMax) - profile[i]!;
+      if (depth > 0) {
+        minima.push({ pos: i, depth });
+      }
+    }
+  }
+
+  if (minima.length < numPeaks - 1) return null;
+
+  // Sort by depth descending, take the (numPeaks-1) deepest
+  minima.sort((a, b) => b.depth - a.depth);
+  const selected = minima.slice(0, numPeaks - 1);
+  selected.sort((a, b) => a.pos - b.pos);
+
+  // Validate spacing
+  for (let i = 1; i < selected.length; i++) {
+    const gap = selected[i]!.pos - selected[i - 1]!.pos;
+    if (gap < minSepar || gap > maxSepar) return null;
+  }
+
+  // Boundaries: [0, ...minima positions, imageDim]
+  const boundaries: number[] = [0];
+  for (const m of selected) boundaries.push(m.pos);
+  boundaries.push(imageDim);
+
+  return boundaries;
+}
+
 // ── Cell extraction ──
 
 /**
@@ -364,8 +583,8 @@ export class OcrService implements OnDestroy {
       checkAborted();
       onProgress?.(15);
 
-      // ── 2. Try grid detection ──
-      const grid = detectGridLines(
+      // ── 2. Try grid-line projection (cards with visible borders) ──
+      let grid = detectGridLines(
         preprocessed.imageData,
         preprocessed.width,
         preprocessed.height,
@@ -381,10 +600,31 @@ export class OcrService implements OnDestroy {
         );
       }
 
-      // ── 3. Fallback: whole-image OCR ──
+      // ── 3. Try content-based grid detection (borderless cards) ──
+      // When there are no visible grid lines, find boundaries from
+      // where the numbers sit.
+      grid = detectGridFromContent(
+        preprocessed.imageData,
+        preprocessed.width,
+        preprocessed.height,
+      );
+
+      if (grid) {
+        onProgress?.(18);
+        return await this.processGridCells(
+          preprocessed.canvas,
+          grid,
+          checkAborted,
+          onProgress,
+        );
+      }
+
+      // ── 4. Fallback: whole-image OCR ──
       onProgress?.(20);
       return await this.processWholeImage(
-        preprocessed.blob,
+        preprocessed.canvas,
+        preprocessed.width,
+        preprocessed.height,
         checkAborted,
         onProgress,
       );
@@ -554,10 +794,36 @@ export class OcrService implements OnDestroy {
    * This is the original approach.
    */
   private async processWholeImage(
-    blob: Blob,
+    sourceCanvas: HTMLCanvasElement,
+    width: number,
+    height: number,
     checkAborted: () => void,
     onProgress?: (progress: number) => void,
   ): Promise<OcrResult> {
+    checkAborted();
+
+    // ── Mask out the center (FREE) cell ──
+    // Control codes, logos, or background patterns in the FREE space
+    // (row 2, col 2) create noise that confuses whole-image OCR.
+    // We paint white over the center ~20% region.
+    const maskedCanvas = document.createElement('canvas');
+    maskedCanvas.width = width;
+    maskedCanvas.height = height;
+    const maskedCtx = maskedCanvas.getContext('2d')!;
+    maskedCtx.drawImage(sourceCanvas, 0, 0);
+    const centerLeft = Math.round(width * 0.38);
+    const centerRight = Math.round(width * 0.62);
+    const centerTop = Math.round(height * 0.38);
+    const centerBottom = Math.round(height * 0.62);
+    maskedCtx.fillStyle = '#ffffff';
+    maskedCtx.fillRect(centerLeft, centerTop, centerRight - centerLeft, centerBottom - centerTop);
+
+    const maskedBlob = await new Promise<Blob>((resolve, reject) => {
+      maskedCanvas.toBlob(b => {
+        if (b) resolve(b);
+        else reject(new Error('Failed to create masked blob'));
+      }, 'image/jpeg', 0.92);
+    });
     checkAborted();
 
     const worker = await createWorker('eng', undefined, {
@@ -576,7 +842,7 @@ export class OcrService implements OnDestroy {
       tessedit_char_whitelist: '0123456789',
     });
 
-    const { data } = await worker.recognize(blob);
+    const { data } = await worker.recognize(maskedBlob);
     checkAborted();
     onProgress?.(92);
 
