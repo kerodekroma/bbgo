@@ -37,12 +37,12 @@ jobs:
         run: pnpm ng build --base-href /${{ github.event.repository.name }}/
 
       - name: Add 404.html for SPA routing
-        run: cp dist/bbgo/index.html dist/bbgo/404.html
+        run: cp dist/bbgo/browser/index.html dist/bbgo/browser/404.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/bbgo
+          path: dist/bbgo/browser
 
       - name: Deploy to GitHub Pages
         id: deployment
