@@ -20,8 +20,17 @@ import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
           @for (col of colIndices(); track col) {
             @let cell = getCell(row, col);
             @if (cell?.isFree) {
-              <div class="bingo-cell is-free" role="gridcell">
-                <span class="free-text">FREE</span>
+              <div
+                class="bingo-cell is-free"
+                [class.is-marked]="cell?.isMarked"
+                [class.is-clickable]="gameMode() === 'card-only'"
+                (click)="onFreeCellClick(row, col)"
+                (keydown)="onCellKeydown($event, row, col)"
+                role="gridcell"
+                [attr.aria-label]="getAriaLabel(cell, row, col)"
+                [attr.tabindex]="gameMode() === 'card-only' ? 0 : -1"
+              >
+                <span class="free-text">{{ cell?.isMarked ? '✓' : 'FREE' }}</span>
               </div>
             } @else if (editMode()) {
               <input
@@ -142,6 +151,20 @@ import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
       border-style: dashed;
       border-color: #ffb74d;
     }
+    .bingo-cell.is-free.is-marked {
+      background: linear-gradient(180deg, #c8e6c9, #a5d6a7);
+      border-style: solid;
+      border-color: #81c784;
+    }
+    .free-text {
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #e65100;
+      text-transform: uppercase;
+    }
+    .is-free.is-marked .free-text {
+      color: #1b5e20;
+    }
     .free-text {
       font-size: 0.75rem;
       font-weight: 800;
@@ -259,8 +282,11 @@ export class BingoCardComponent {
 
   protected onCellClick(row: number, col: number): void {
     if (this.gameMode() !== 'card-only') return;
-    const cell = this.getCell(row, col);
-    if (cell?.isFree) return;
+    this.cellToggled.emit({ row, col });
+  }
+
+  protected onFreeCellClick(row: number, col: number): void {
+    if (this.gameMode() !== 'card-only') return;
     this.cellToggled.emit({ row, col });
   }
 

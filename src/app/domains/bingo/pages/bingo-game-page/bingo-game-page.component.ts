@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal } from '@angular/core';
+import { Component, inject, computed, signal, HostListener } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,6 +11,8 @@ import { NumberBoardComponent } from '../../ui/number-board/number-board.compone
 import { CardTabsComponent } from '../../ui/card-tabs/card-tabs.component';
 import { AddCardDialogComponent } from '../../ui/add-card-dialog/add-card-dialog.component';
 import { SettingsDialogComponent } from '../../ui/settings-dialog/settings-dialog.component';
+import { ClearDialogComponent } from '../../ui/clear-dialog/clear-dialog.component';
+import type { ClearDialogResult } from '../../ui/clear-dialog/clear-dialog.component';
 
 interface WinEntry {
   cardId: string;
@@ -36,15 +38,36 @@ interface WinEntry {
           <mat-icon class="title-icon">casino</mat-icon>
           BINGO TRACKER
         </h1>
-        <button
-          mat-icon-button
-          class="settings-btn"
-          (click)="onOpenSettings()"
-          aria-label="Pattern settings"
-          type="button"
-        >
-          <mat-icon>tune</mat-icon>
-        </button>
+        <div class="header-actions">
+          <button
+            mat-stroked-button
+            class="save-btn"
+            (click)="onSaveSession()"
+            [disabled]="!facade.dirty()"
+            type="button"
+          >
+            <mat-icon class="save-btn-icon">{{ facade.dirty() ? 'save' : 'cloud_done' }}</mat-icon>
+            <span class="save-btn-label">{{ facade.dirty() ? 'Save Session' : 'Saved' }}</span>
+          </button>
+          <button
+            mat-icon-button
+            class="clear-btn"
+            (click)="onOpenClearDialog()"
+            aria-label="Clear data"
+            type="button"
+          >
+            <mat-icon>delete_sweep</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="settings-btn"
+            (click)="onOpenSettings()"
+            aria-label="Pattern settings"
+            type="button"
+          >
+            <mat-icon>tune</mat-icon>
+          </button>
+        </div>
       </header>
 
       @if (winEntries().length > 0) {
@@ -111,6 +134,7 @@ interface WinEntry {
           [gameMode]="facade.gameMode()"
           [calledNumbers]="facade.calledNumbers()"
           [winResults]="facade.winResults()"
+          [enabledPatterns]="facade.patternSettings().enabled"
           (cardSelected)="onCardSelected($event)"
           (addCard)="onAddCard()"
           (deleteCard)="onDeleteCard($event)"
@@ -124,14 +148,19 @@ interface WinEntry {
   `,
   styles: [`
     .game-page { max-width: 600px; margin: 0 auto; padding: 16px; min-height: 100vh; }
-    .game-header { text-align: center; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; }
+    .game-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 8px; }
     .game-title {
       font-size: 1.8rem; font-weight: 800; color: var(--bingo-header-bg);
-      margin: 0; display: flex; align-items: center; justify-content: center;
-      gap: 8px; letter-spacing: 4px;
+      margin: 0; display: flex; align-items: center;
+      gap: 8px; letter-spacing: 4px; flex-shrink: 0;
     }
     .title-icon { font-size: 32px; width: 32px; height: 32px; }
-    .settings-btn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+    .header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .save-btn { height: 36px; line-height: 36px; font-size: 0.8rem; border-radius: 18px; padding: 0 12px; }
+    .save-btn-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
+    .save-btn-label { display: inline; }
+    .clear-btn { color: #999; }
+    .clear-btn:hover { color: #d32f2f; }
     .game-content { display: flex; flex-direction: column; gap: 16px; }
     .caller-section { display: flex; flex-direction: column; gap: 8px; }
     .caller-toggle { display: flex; justify-content: center; }
@@ -166,7 +195,14 @@ interface WinEntry {
       from { transform: translateY(-20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    @media (max-width: 480px) { .game-page { padding: 8px; } .game-title { font-size: 1.4rem; } }
+    @media (max-width: 480px) {
+      .game-page { padding: 8px; }
+      .game-title { font-size: 1.2rem; letter-spacing: 2px; }
+      .title-icon { font-size: 24px; width: 24px; height: 24px; }
+      .save-btn-label { display: none; }
+      .save-btn { min-width: 36px; padding: 0 8px; }
+      .save-btn-icon { margin-right: 0; }
+    }
   `],
 })
 export class BingoGamePageComponent {
@@ -193,8 +229,20 @@ export class BingoGamePageComponent {
     this.facade.loadFromStorage();
   }
 
+  /** Auto-save session when the user closes or reloads the tab */
+  @HostListener('window.beforeunload')
+  protected onBeforeUnload(): void {
+    if (this.facade.dirty()) {
+      this.facade.saveSession();
+    }
+  }
+
   protected formatWinPatterns(patterns: WinPattern[]): string {
     return patterns.map(p => p.description).join(', ');
+  }
+
+  protected onSaveSession(): void {
+    this.facade.saveSession();
   }
 
   protected onToggleView(value: 'caller' | 'board'): void {
@@ -215,6 +263,24 @@ export class BingoGamePageComponent {
     } else {
       this.facade.callNumber(n);
     }
+  }
+
+  protected async onOpenClearDialog(): Promise<void> {
+    const result = await this.dialog.open(ClearDialogComponent, {
+      width: '400px',
+    }).afterClosed().toPromise() as ClearDialogResult | undefined;
+
+    if (!result) return; // cancelled
+
+    if (result.resetGame) {
+      this.facade.resetGame();
+    }
+    if (result.deleteCards) {
+      this.facade.deleteAllCards();
+    }
+
+    // Persist the cleared state to localStorage immediately
+    this.facade.saveSession();
   }
 
   protected onOpenSettings(): void {

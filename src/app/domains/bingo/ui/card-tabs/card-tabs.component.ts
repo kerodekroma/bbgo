@@ -8,7 +8,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import type { BingoCard } from '../../domain/bingo-card.entity';
 import type { CardId } from '../../domain/card-id.vo';
 import type { GameMode } from '../../domain/game-mode.type';
-import type { WinPattern } from '../../domain/win-pattern.type';
+import type { WinPattern, WinPatternKind } from '../../domain/win-pattern.type';
+import { PATTERN_LABELS } from '../../domain/win-pattern.type';
 import { BingoCardComponent } from '../bingo-card/bingo-card.component';
 
 @Component({
@@ -70,12 +71,14 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
                   }
                 </mat-panel-title>
                 <mat-panel-description class="panel-description">
-                  <span class="card-percentage">{{ getProgress(card) }}%</span>
+                  @let p = getBestProgress(card);
+                  <span class="card-pattern-label">{{ p.label }}</span>
+                  <span class="card-percentage">{{ p.pct }}%</span>
                   <mat-progress-bar
                     class="card-progress"
                     mode="determinate"
-                    [value]="getProgress(card)"
-                    [ngClass]="getProgressClass(card)"
+                    [value]="p.pct"
+                    [ngClass]="getProgressClass(p.pct)"
                   />
                 </mat-panel-description>
               </mat-expansion-panel-header>
@@ -237,12 +240,20 @@ import { BingoCardComponent } from '../bingo-card/bingo-card.component';
       gap: 10px;
       justify-content: flex-end;
     }
-    .card-percentage {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #666;
+    .card-pattern-label {
+      font-size: 0.72rem;
+      color: #888;
+      margin-right: 4px;
       white-space: nowrap;
-      min-width: 36px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100px;
+    }
+    .card-percentage {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #555;
+      min-width: 32px;
       text-align: right;
     }
     .card-progress {
@@ -287,6 +298,7 @@ export class CardTabsComponent {
   readonly gameMode = input.required<GameMode>();
   readonly calledNumbers = input<number[]>([]);
   readonly winResults = input<Map<string, WinPattern[]>>(new Map());
+  readonly enabledPatterns = input<WinPatternKind[]>([]);
   readonly cardSelected = output<CardId>();
   readonly addCard = output<void>();
   readonly deleteCard = output<CardId>();
@@ -302,14 +314,36 @@ export class CardTabsComponent {
   protected readonly renamingCard = signal<CardId | null>(null);
   protected readonly renameDraft = signal<string>('');
 
-  protected getProgress(card: BingoCard): number {
-    const total = card.grid.length;
-    const marked = card.grid.filter(c => c.isMarked).length;
-    return Math.round((marked / total) * 100);
+  /**
+   * Returns the best pattern progress for a card — picks the enabled pattern
+   * with the highest completion percentage. Falls back to overall progress
+   * if no patterns are enabled.
+   */
+  protected getBestProgress(card: BingoCard): { pct: number; label: string } {
+    const enabled = this.enabledPatterns();
+    if (enabled.length === 0) {
+      // Fallback: overall non-free progress
+      const cells = card.grid.filter(c => !c.isFree);
+      const marked = cells.filter(c => c.isMarked).length;
+      const pct = cells.length > 0 ? Math.round((marked / cells.length) * 100) : 0;
+      return { pct, label: 'Marked' };
+    }
+
+    let bestKind: WinPatternKind = enabled[0]!;
+    let bestPct = -1;
+
+    for (const kind of enabled) {
+      const pct = card.getPatternProgress(kind);
+      if (pct > bestPct) {
+        bestPct = pct;
+        bestKind = kind;
+      }
+    }
+
+    return { pct: bestPct, label: PATTERN_LABELS[bestKind] };
   }
 
-  protected getProgressClass(card: BingoCard): string {
-    const pct = this.getProgress(card);
+  protected getProgressClass(pct: number): string {
     if (pct >= 100) return 'progress-complete';
     if (pct >= 75) return 'progress-high';
     if (pct >= 50) return 'progress-mid';
