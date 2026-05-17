@@ -3,3 +3,4 @@ export { NumberCallerComponent } from './number-caller/number-caller.component';
 export { CardTabsComponent } from './card-tabs/card-tabs.component';
 export { AddCardDialogComponent } from './add-card-dialog/add-card-dialog.component';
 export { SettingsDialogComponent } from './settings-dialog/settings-dialog.component';
+export { ClearDialogComponent } from './clear-dialog/clear-dialog.component';
