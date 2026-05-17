@@ -44,8 +44,7 @@ __screenshots__/
 /playwright-report/
 /playwright/.cache/
 
-# Generated files
-src/app/shared/lib/version.ts
+# Generated files — version.ts is tracked so CI and previews show the correct tag
 
 # System files
 .DS_Store
