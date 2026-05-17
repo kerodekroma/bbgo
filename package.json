@@ -4,8 +4,9 @@
   "description": "Digital bingo card tracker",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
+    "gen:version": "bash scripts/gen-version.sh",
+    "start": "bash scripts/gen-version.sh && ng serve",
+    "build": "bash scripts/gen-version.sh && ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "e2e": "playwright test",

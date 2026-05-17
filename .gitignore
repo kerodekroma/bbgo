@@ -44,6 +44,9 @@ __screenshots__/
 /playwright-report/
 /playwright/.cache/
 
+# Generated files
+src/app/shared/lib/version.ts
+
 # System files
 .DS_Store
 Thumbs.db

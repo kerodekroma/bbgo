@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# ── Bump version, tag, and push ──
+# ── Bump version: tag and push ──
+# Version is auto-derived from git tags at build time (gen-version.sh).
+# This script just creates the tag and pushes it.
+#
 # Usage:
 #   ./scripts/bump-version.sh 1.0.1        # set specific version
 #   ./scripts/bump-version.sh patch        # 1.0.0 -> 1.0.1
@@ -7,12 +10,14 @@
 #   ./scripts/bump-version.sh major        # 1.0.0 -> 2.0.0
 set -euo pipefail
 
-VERSION_FILE="src/app/shared/lib/version.ts"
-current=$(sed -n "s/^export const APP_VERSION = '\(.*\)';/\1/p" "$VERSION_FILE")
+# Determine current version from the last tag (or 0.0.0)
+current=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
 
 if [ $# -ne 1 ]; then
-  echo "Current version: $current"
+  echo "Current version (from git tags): $current"
   echo "Usage: $0 <version | patch | minor | major>"
+  echo ""
+  echo "  Run 'pnpm build' after tagging to regenerate version.ts."
   exit 1
 fi
 
@@ -32,14 +37,11 @@ esac
 
 echo "Bumping: $current -> $new"
 
-# Update version file
-sed -i "s/^export const APP_VERSION = '.*';/export const APP_VERSION = '$new';/" "$VERSION_FILE"
-
-# Commit and tag
-git add "$VERSION_FILE"
-git commit -m "Bump version to $new"
+# Tag and push — version.ts is auto-generated at build time
 git tag -a "v$new" -m "v$new"
 
 echo ""
-echo "Done! Now push with:"
+echo "Done! Push with:"
 echo "  git push origin main --tags"
+echo ""
+echo "The next build (local or CI) will use v$new."
