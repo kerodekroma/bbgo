@@ -18,6 +18,7 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
   'letter-x',
   'letter-l',
   'letter-t',
+  'letter-i',
   'frame',
 ];
 
@@ -163,7 +164,7 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
 
     .pattern-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 10px;
       margin-bottom: 16px;
     }
@@ -239,11 +240,10 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
     .card-desc {
       font-size: 0.7rem;
       color: #888;
-      line-height: 1.2;
-      overflow: hidden;
+      line-height: 1.3;
       min-width: 0;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .card-toggle {
@@ -278,10 +278,9 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       color: #f9a825;
     }
 
-    @media (max-width: 460px) {
-      .pattern-grid {
-        grid-template-columns: 1fr;
-        gap: 8px;
+    @media (max-width: 400px) {
+      :host ::ng-deep .mat-mdc-dialog-content {
+        padding: 0 12px !important;
       }
       .pattern-card {
         padding: 8px 10px;
@@ -302,7 +301,7 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       }
     }
 
-    @media (max-width: 360px) {
+    @media (max-width: 340px) {
       :host ::ng-deep .mat-mdc-dialog-content {
         padding: 0 12px !important;
       }

@@ -96,6 +96,7 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'pattern.letterL': 'Letter L',
     'pattern.letterT': 'Letter T',
     'pattern.frame': 'Frame',
+    'pattern.letterI': 'Letter I',
     'pattern.fullHouse': 'Full House',
 
     'pattern.desc.singleLine': 'Any complete row, column, or diagonal',
@@ -106,6 +107,7 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'pattern.desc.letterL': 'Any full row + any full column',
     'pattern.desc.letterT': 'Any full row + the center column',
     'pattern.desc.frame': 'All 16 outer border cells',
+    'pattern.desc.letterI': 'Top row + center column + bottom row (I shape)',
     'pattern.desc.fullHouse': 'All 25 cells marked',
 
     'bingoCard.gridAria': 'Bingo card',
@@ -211,6 +213,7 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'pattern.letterL': 'Letra L',
     'pattern.letterT': 'Letra T',
     'pattern.frame': 'Marco',
+    'pattern.letterI': 'Letra I',
     'pattern.fullHouse': 'Cartón Lleno',
 
     'pattern.desc.singleLine': 'Cualquier fila, columna o diagonal completa',
@@ -221,6 +224,7 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'pattern.desc.letterL': 'Cualquier fila + cualquier columna completa',
     'pattern.desc.letterT': 'Cualquier fila + la columna central completa',
     'pattern.desc.frame': 'Las 16 celdas del borde exterior',
+    'pattern.desc.letterI': 'Fila superior + columna central + fila inferior (forma de I)',
     'pattern.desc.fullHouse': 'Las 25 celdas marcadas',
 
     'bingoCard.gridAria': 'Cartón de Bingo',

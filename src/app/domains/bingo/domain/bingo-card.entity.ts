@@ -313,6 +313,19 @@ export class BingoCard {
       }
     }
 
+    // ── Letter I = top row + center column + bottom row ──
+    const topRow = this.getRowCells(0);
+    const bottomRow = this.getRowCells(4);
+    const iCenterCol = this.getColumnCells(2);
+    if (topRow.every(c => c.isMarked) && bottomRow.every(c => c.isMarked) && iCenterCol.every(c => c.isMarked)) {
+      const iCells = [...new Map(
+        [...topRow, ...bottomRow, ...iCenterCol]
+          .map(cell => [cell.row * 5 + cell.col, cell]),
+      ).values()];
+      patterns.push({ kind: 'letter-i', cells: iCells, description: 'Letter I' });
+      markAll(iCells);
+    }
+
     // ── Full House ──
     if (this._grid.every(c => c.isMarked)) {
       patterns.push({ kind: 'full-house', cells: [...this._grid], description: 'Full House!' });
@@ -445,6 +458,15 @@ export class BingoCard {
           best = Math.max(best, marked / unique.size);
         }
         return Math.round(best * 100);
+      }
+
+      case 'letter-i': {
+        const topRow = this.getRowCells(0);
+        const bottomRow = this.getRowCells(4);
+        const iCenterCol = this.getColumnCells(2);
+        const unique = new Set([...topRow, ...bottomRow, ...iCenterCol].map(cell => cell.row * 5 + cell.col));
+        const marked = [...unique].filter(i => cells[i]?.isMarked).length;
+        return Math.round((marked / unique.size) * 100);
       }
 
       case 'frame': {

@@ -70,15 +70,26 @@ src/app/domains/bingo/
 - [x] Letter X (both diagonals)
 - [x] Letter L (any full row + full column)
 - [x] Letter T (any full row + center column)
+- [x] Letter I (top row + center column + bottom row — 13 cells)
 - [x] Frame (all 16 outer border cells)
 - [x] Full House (all 25 cells)
 - [x] Multi-Line (2+ lines simultaneously)
+
+### Settings Dialog
+- [x] "Fulfill All" master toggle at top of pattern settings
+  - Enables/disables all patterns at once
+  - Reactive: unchecks when any individual pattern is deselected
+- [x] Full-width single-column pattern card layout
+- [x] Responsive breakpoints (400px, 340px) for mobile
+  - Scaled toggles, hidden metadata, compact icons on small screens
+- [x] Multi-line pattern descriptions (no horizontal overflow on mobile)
 
 ### Pattern-Aware Progress
 - [x] Each card tab shows the best-matching enabled pattern name + percentage
 - [x] Progress calculated per-pattern (not overall card fill)
 - [x] FREE cell excluded from all progress calculations
 - [x] Color-coded progress bar matching closeness to completion
+- [x] Fixed pattern name rendering (was showing kebab-case ID instead of translated name)
 
 ### Number Calling & History
 - [x] **Caller input** — type number, press Enter to call

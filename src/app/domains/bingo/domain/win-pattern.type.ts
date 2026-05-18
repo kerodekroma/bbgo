@@ -9,6 +9,7 @@ export type WinPatternKind =
   | 'letter-x'
   | 'letter-l'
   | 'letter-t'
+  | 'letter-i'
   | 'frame'
   | 'full-house';
 
@@ -28,6 +29,7 @@ export const PATTERN_LABELS: Record<WinPatternKind, string> = {
   'letter-x': 'Letter X',
   'letter-l': 'Letter L',
   'letter-t': 'Letter T',
+  'letter-i': 'Letter I',
   'frame': 'Frame',
   'full-house': 'Full House',
 };
@@ -51,6 +53,7 @@ export const PATTERN_VISUAL_CELLS: Record<WinPatternKind, readonly number[]> = {
   'letter-x': [0, 4, 6, 8, 12, 16, 18, 20, 24],
   'letter-l': [0, 1, 2, 3, 4, 9, 14, 19, 24],
   'letter-t': [0, 1, 2, 3, 4, 7, 12, 17, 22],
+  'letter-i': [0, 1, 2, 3, 4, 7, 12, 17, 20, 21, 22, 23, 24],
   'frame': [0, 1, 2, 3, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 23, 24],
   'full-house': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
 };
@@ -64,6 +67,7 @@ export const PATTERN_DESCRIPTIONS: Record<WinPatternKind, string> = {
   'letter-x': 'Both diagonals forming an X',
   'letter-l': 'Any full row + any full column',
   'letter-t': 'Any full row + the center column',
+  'letter-i': 'Top row + center column + bottom row (I shape)',
   'frame': 'All 16 outer border cells',
   'full-house': 'All 25 cells marked',
 };
@@ -77,6 +81,7 @@ export const PATTERN_CELL_COUNTS: Record<WinPatternKind, number> = {
   'letter-x': 9,
   'letter-l': 9,
   'letter-t': 9,
+  'letter-i': 13,
   'frame': 16,
   'full-house': 25,
 };
@@ -95,6 +100,7 @@ export const DEFAULT_PATTERN_SETTINGS: PatternSettings = {
     'letter-x',
     'letter-l',
     'letter-t',
+    'letter-i',
     'frame',
   ],
 };
