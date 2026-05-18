@@ -83,6 +83,8 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
 
     'settings.title': 'Win Pattern Settings',
     'settings.description': 'Enable or disable which patterns are checked for wins.',
+    'settings.fulfillAll': 'Fulfill All',
+    'settings.fulfillAllDesc': 'All patterns must be satisfied to win',
     'settings.alwaysOn': 'Multi-Line and Full House are always detected when applicable.',
     'settings.resetDefaults': 'Reset Defaults',
 
@@ -196,6 +198,8 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
 
     'settings.title': 'Config. de Patrones',
     'settings.description': 'Activa o desactiva qué patrones se verifican para ganar.',
+    'settings.fulfillAll': 'Cumplir Todos',
+    'settings.fulfillAllDesc': 'Todos los patrones deben cumplirse para ganar',
     'settings.alwaysOn': 'Multi-Línea y Cartón Lleno siempre se detectan cuando aplican.',
     'settings.resetDefaults': 'Rest. Predeterminados',
 

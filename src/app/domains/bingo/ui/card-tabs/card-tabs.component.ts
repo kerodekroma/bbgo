@@ -359,7 +359,12 @@ export class CardTabsComponent {
       }
     }
 
-    return { pct: bestPct, label: this.t()('pattern.' + bestKind) };
+    return { pct: bestPct, label: this.t()('pattern.' + this.kindKey(bestKind)) };
+  }
+
+  /** Convert 'single-line' → 'singleLine' for translation key lookup */
+  private kindKey(kind: WinPatternKind): string {
+    return kind.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
   }
 
   /**

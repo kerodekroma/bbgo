@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +39,24 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
 
     <mat-dialog-content>
       <p class="description">{{ t()('settings.description') }}</p>
+
+      <!-- Fulfill All master toggle -->
+      <div
+        class="fulfill-all-bar"
+        [class.is-active]="isFulfillAll()"
+      >
+        <div class="fulfill-all-info">
+          <mat-icon>checklist</mat-icon>
+          <div class="fulfill-all-text">
+            <div class="fulfill-all-name">{{ t()('settings.fulfillAll') }}</div>
+            <div class="fulfill-all-desc">{{ t()('settings.fulfillAllDesc') }}</div>
+          </div>
+        </div>
+        <mat-slide-toggle
+          [checked]="isFulfillAll()"
+          (toggleChange)="toggleFulfillAll()"
+        />
+      </div>
 
       <div class="pattern-grid">
         @for (kind of toggleablePatterns; track kind) {
@@ -88,6 +106,59 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       color: #666;
       font-size: 0.9rem;
       margin: 0 0 16px;
+    }
+
+    :host ::ng-deep .mat-mdc-dialog-content {
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+
+    .fulfill-all-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 2px solid #e8e0d4;
+      background: #faf8f5;
+      margin-bottom: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .fulfill-all-bar.is-active {
+      border-color: #c62828;
+      background: #fefcf9;
+      box-shadow: 0 0 0 1px rgba(198,40,40,0.08), 0 2px 8px rgba(198,40,40,0.08);
+    }
+
+    .fulfill-all-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .fulfill-all-info mat-icon {
+      color: #c62828;
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
+    }
+
+    .fulfill-all-bar:not(.is-active) .fulfill-all-info mat-icon {
+      color: #999;
+    }
+
+    .fulfill-all-name {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: #1a1a1a;
+      line-height: 1.2;
+    }
+
+    .fulfill-all-desc {
+      font-size: 0.75rem;
+      color: #888;
+      line-height: 1.2;
     }
 
     .pattern-grid {
@@ -170,8 +241,13 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       color: #888;
       line-height: 1.2;
       overflow: hidden;
+      min-width: 0;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .card-toggle {
+      flex-shrink: 0;
     }
 
     .card-meta {
@@ -209,6 +285,51 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       }
       .pattern-card {
         padding: 8px 10px;
+        gap: 8px;
+      }
+      .fulfill-all-bar {
+        padding: 10px 12px;
+      }
+      .card-visual {
+        width: 44px;
+        height: 44px;
+      }
+      .card-meta {
+        display: none;
+      }
+      .card-toggle {
+        transform: scale(0.85);
+      }
+    }
+
+    @media (max-width: 360px) {
+      :host ::ng-deep .mat-mdc-dialog-content {
+        padding: 0 12px !important;
+      }
+      .pattern-card {
+        gap: 6px;
+        padding: 8px;
+      }
+      .card-visual {
+        width: 36px;
+        height: 36px;
+      }
+      .card-name {
+        font-size: 0.8rem;
+      }
+      .card-desc {
+        font-size: 0.65rem;
+      }
+      .fulfill-all-desc {
+        display: none;
+      }
+      .fulfill-all-info mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+      .fulfill-all-name {
+        font-size: 0.85rem;
       }
     }
   `],
@@ -225,6 +346,12 @@ export class SettingsDialogComponent {
     new Set(this.facade.patternSettings().enabled),
   );
 
+  /** True when ALL toggleable patterns are enabled — drives the "Fulfill All" toggle state */
+  protected readonly isFulfillAll = computed(() => {
+    const enabled = this.enabledSet();
+    return TOGGLEABLE_PATTERNS.every(kind => enabled.has(kind));
+  });
+
   protected kindKey(kind: WinPatternKind): string {
     // Convert 'single-line' → 'singleLine', 'four-corners' → 'fourCorners', etc.
     return kind.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -232,6 +359,20 @@ export class SettingsDialogComponent {
 
   protected cellCount(kind: WinPatternKind): number {
     return PATTERN_CELL_COUNTS[kind];
+  }
+
+  /** Toggle the "Fulfill All" master switch */
+  protected toggleFulfillAll(): void {
+    if (this.isFulfillAll()) {
+      // Currently all enabled → disable all
+      this.enabledSet.set(new Set());
+    } else {
+      // Not all enabled → enable all
+      this.enabledSet.set(new Set(TOGGLEABLE_PATTERNS));
+    }
+    this.facade.setPatternSettings({
+      enabled: [...this.enabledSet()],
+    });
   }
 
   protected toggle(kind: WinPatternKind): void {
