@@ -96,6 +96,16 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'pattern.frame': 'Frame',
     'pattern.fullHouse': 'Full House',
 
+    'pattern.desc.singleLine': 'Any complete row, column, or diagonal',
+    'pattern.desc.multiLine': 'Two or more complete lines at once',
+    'pattern.desc.fourCorners': 'All 4 corner cells',
+    'pattern.desc.postageStamp': 'A full 2×2 block in any corner',
+    'pattern.desc.letterX': 'Both diagonals forming an X',
+    'pattern.desc.letterL': 'Any full row + any full column',
+    'pattern.desc.letterT': 'Any full row + the center column',
+    'pattern.desc.frame': 'All 16 outer border cells',
+    'pattern.desc.fullHouse': 'All 25 cells marked',
+
     'bingoCard.gridAria': 'Bingo card',
     'bingoCard.cellAria': 'Row {{row}}, Column {{col}}',
     'bingoCard.freeCellAria': 'Row {{row}}, Column {{col}}, FREE space',
@@ -198,6 +208,16 @@ export const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'pattern.letterT': 'Letra T',
     'pattern.frame': 'Marco',
     'pattern.fullHouse': 'Cartón Lleno',
+
+    'pattern.desc.singleLine': 'Cualquier fila, columna o diagonal completa',
+    'pattern.desc.multiLine': 'Dos o más líneas completas a la vez',
+    'pattern.desc.fourCorners': 'Las 4 celdas de las esquinas',
+    'pattern.desc.postageStamp': 'Un bloque 2×2 completo en cualquier esquina',
+    'pattern.desc.letterX': 'Ambas diagonales formando una X',
+    'pattern.desc.letterL': 'Cualquier fila + cualquier columna completa',
+    'pattern.desc.letterT': 'Cualquier fila + la columna central completa',
+    'pattern.desc.frame': 'Las 16 celdas del borde exterior',
+    'pattern.desc.fullHouse': 'Las 25 celdas marcadas',
 
     'bingoCard.gridAria': 'Cartón de Bingo',
     'bingoCard.cellAria': 'Fila {{row}}, Columna {{col}}',

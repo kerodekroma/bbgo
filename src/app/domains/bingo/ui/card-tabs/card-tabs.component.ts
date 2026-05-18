@@ -117,6 +117,7 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
                   [gameMode]="gameMode()"
                   [calledNumbers]="calledNumbers()"
                   [editMode]="editModes()[card.id] ?? false"
+                  [highlightedPattern]="getHighlightPattern(card)"
                   (cellToggled)="onCellToggled(card.id, $event)"
                   (numberChanged)="onNumberChanged(card.id, $event)"
                 />
@@ -359,6 +360,29 @@ export class CardTabsComponent {
     }
 
     return { pct: bestPct, label: this.t()('pattern.' + bestKind) };
+  }
+
+  /**
+   * Returns the best enabled pattern for the card to use as highlight.
+   * Only highlights when the card has fewer than 100% progress (not yet won).
+   */
+  protected getHighlightPattern(card: BingoCard): WinPatternKind | null {
+    const enabled = this.enabledPatterns();
+    if (enabled.length === 0) return null;
+
+    let bestKind: WinPatternKind = enabled[0]!;
+    let bestPct = -1;
+
+    for (const kind of enabled) {
+      const pct = card.getPatternProgress(kind);
+      if (pct > bestPct) {
+        bestPct = pct;
+        bestKind = kind;
+      }
+    }
+
+    // Only highlight if the card hasn't completed this pattern yet
+    return bestPct < 100 ? bestKind : null;
   }
 
   protected getProgressClass(pct: number): string {

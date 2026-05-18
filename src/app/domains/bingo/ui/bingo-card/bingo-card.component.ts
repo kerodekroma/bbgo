@@ -1,7 +1,9 @@
-import { Component, input, output, signal, effect, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, input, output, signal, effect, inject, ChangeDetectorRef, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { BingoCard } from '../../domain/bingo-card.entity';
 import type { GameMode } from '../../domain/game-mode.type';
+import type { WinPatternKind } from '../../domain/win-pattern.type';
+import { PATTERN_VISUAL_CELLS } from '../../domain/win-pattern.type';
 import { COLUMNS, COLUMN_RANGES } from '../../domain/bingo-column.type';
 import { LanguageService } from '../../../../shared/i18n/language.service';
 
@@ -24,6 +26,7 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
               <div
                 class="bingo-cell is-free"
                 [class.is-marked]="cell?.isMarked"
+                [class.is-highlighted]="isCellHighlighted(row, col)"
                 [class.is-clickable]="gameMode() === 'card-only'"
                 (click)="onFreeCellClick(row, col)"
                 (keydown)="onCellKeydown($event, row, col)"
@@ -50,6 +53,7 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
                 class="bingo-cell"
                 [class.is-marked]="cell?.isMarked"
                 [class.is-winning]="cell?.isWinningCell"
+                [class.is-highlighted]="isCellHighlighted(row, col) && !cell?.isWinningCell"
                 [class.is-clickable]="gameMode() === 'card-only'"
                 (click)="onCellClick(row, col)"
                 (keydown)="onCellKeydown($event, row, col)"
@@ -147,6 +151,10 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
       animation: pulse-gold 1s ease-in-out infinite;
       box-shadow: 0 0 12px rgba(255,215,0,0.5);
     }
+    .bingo-cell.is-highlighted {
+      border-color: #5c6bc0;
+      box-shadow: inset 0 0 0 2px rgba(92,107,192,0.3), 0 0 6px rgba(92,107,192,0.15);
+    }
     .bingo-cell.is-free {
       background: linear-gradient(180deg, #fff3e0, #ffe0b2);
       border-style: dashed;
@@ -218,6 +226,7 @@ export class BingoCardComponent {
   readonly gameMode = input.required<GameMode>();
   readonly calledNumbers = input<number[]>([]);
   readonly editMode = input<boolean>(false);
+  readonly highlightedPattern = input<WinPatternKind | null>(null);
   readonly cellToggled = output<{ row: number; col: number }>();
   readonly numberChanged = output<{ row: number; col: number; newNumber: number }>();
 
@@ -238,11 +247,22 @@ export class BingoCardComponent {
   protected readonly rowIndices = () => [0, 1, 2, 3, 4];
   protected readonly colIndices = () => [0, 1, 2, 3, 4];
 
+  /** Current set of cell indices that belong to the highlighted pattern */
+  protected readonly highlightedCells = computed<Set<number>>(() => {
+    const pattern = this.highlightedPattern();
+    if (!pattern) return new Set();
+    return new Set(PATTERN_VISUAL_CELLS[pattern]);
+  });
+
   /** Track invalid inputs per cell for visual feedback */
   private readonly invalidCells = signal<Set<string>>(new Set());
 
   protected getCell(row: number, col: number) {
     return this.card().getCell(row, col);
+  }
+
+  protected isCellHighlighted(row: number, col: number): boolean {
+    return this.highlightedCells().has(row * 5 + col);
   }
 
   protected getMin(col: number): number {

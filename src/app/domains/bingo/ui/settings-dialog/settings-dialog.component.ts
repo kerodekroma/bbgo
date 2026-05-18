@@ -3,11 +3,12 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { FormsModule } from '@angular/forms';
 import { BingoFacade } from '../../application/bingo.facade';
 import { DEFAULT_PATTERN_SETTINGS } from '../../domain/win-pattern.type';
 import type { WinPatternKind } from '../../domain/win-pattern.type';
+import { PATTERN_CELL_COUNTS } from '../../domain/win-pattern.type';
 import { LanguageService } from '../../../../shared/i18n/language.service';
+import { PatternIconComponent } from '../pattern-icon/pattern-icon.component';
 
 /** Patterns the user can toggle (excludes inferred patterns like multi-line and full-house) */
 const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
@@ -28,7 +29,7 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
     MatSlideToggleModule,
     MatButtonModule,
     MatIconModule,
-    FormsModule,
+    PatternIconComponent,
   ],
   template: `
     <h2 mat-dialog-title>
@@ -39,15 +40,35 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
     <mat-dialog-content>
       <p class="description">{{ t()('settings.description') }}</p>
 
-      <div class="settings-list">
+      <div class="pattern-grid">
         @for (kind of toggleablePatterns; track kind) {
-          <label class="setting-row">
-            <span class="setting-label">{{ t()('pattern.' + kind) }}</span>
+          <div
+            class="pattern-card"
+            [class.is-enabled]="enabledSet().has(kind)"
+            (click)="toggle(kind)"
+            (keydown.enter)="toggle(kind)"
+            (keydown.space)="toggle(kind); $event.preventDefault()"
+            role="button"
+            [attr.aria-pressed]="enabledSet().has(kind)"
+            [attr.tabindex]="0"
+          >
+            <div class="card-visual">
+              <app-pattern-icon [pattern]="kind" />
+            </div>
+
+            <div class="card-body">
+              <div class="card-name">{{ t()('pattern.' + kindKey(kind)) }}</div>
+              <div class="card-desc">{{ t()('pattern.desc.' + kindKey(kind)) }}</div>
+              <div class="card-meta">{{ cellCount(kind) }} cells</div>
+            </div>
+
             <mat-slide-toggle
+              class="card-toggle"
               [checked]="enabledSet().has(kind)"
               (toggleChange)="toggle(kind)"
+              (click)="$event.stopPropagation()"
             />
-          </label>
+          </div>
         }
       </div>
 
@@ -68,32 +89,106 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       font-size: 0.9rem;
       margin: 0 0 16px;
     }
-    .settings-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+
+    .pattern-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
     }
-    .setting-row {
+
+    .pattern-card {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 12px;
       padding: 10px 12px;
-      border-radius: 8px;
+      border-radius: 10px;
+      border: 2px solid #e8e0d4;
+      background: #faf8f5;
       cursor: pointer;
-      transition: background 0.15s ease;
+      transition: all 0.15s ease;
+      user-select: none;
     }
-    .setting-row:hover {
+
+    .pattern-card:hover {
       background: #f5f0e8;
+      border-color: #d4c9b0;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
-    .setting-label {
-      font-weight: 500;
-      font-size: 1rem;
+
+    .pattern-card:focus-visible {
+      outline: 3px solid #c62828;
+      outline-offset: 2px;
     }
+
+    .pattern-card.is-enabled {
+      background: #fefcf9;
+      border-color: #c62828;
+      box-shadow: 0 0 0 1px rgba(198,40,40,0.08), 0 2px 8px rgba(198,40,40,0.08);
+    }
+
+    .pattern-card.is-enabled:hover {
+      border-color: #b71c1c;
+      box-shadow: 0 0 0 1px rgba(198,40,40,0.12), 0 3px 12px rgba(198,40,40,0.12);
+    }
+
+    .card-visual {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #e8e0d4;
+    }
+
+    .is-enabled .card-visual {
+      border-color: #c62828;
+      background: #fff5f5;
+    }
+
+    .card-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .card-name {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #1a1a1a;
+      line-height: 1.2;
+    }
+
+    .card-desc {
+      font-size: 0.7rem;
+      color: #888;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-meta {
+      font-size: 0.65rem;
+      color: #aaa;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    .card-toggle {
+      flex-shrink: 0;
+    }
+
     .always-on {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-top: 20px;
       padding: 10px 12px;
       background: #fff8e1;
       border-radius: 8px;
@@ -105,6 +200,16 @@ const TOGGLEABLE_PATTERNS: WinPatternKind[] = [
       width: 18px;
       height: 18px;
       color: #f9a825;
+    }
+
+    @media (max-width: 460px) {
+      .pattern-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .pattern-card {
+        padding: 8px 10px;
+      }
     }
   `],
 })
@@ -119,6 +224,15 @@ export class SettingsDialogComponent {
   protected readonly enabledSet = signal<Set<WinPatternKind>>(
     new Set(this.facade.patternSettings().enabled),
   );
+
+  protected kindKey(kind: WinPatternKind): string {
+    // Convert 'single-line' → 'singleLine', 'four-corners' → 'fourCorners', etc.
+    return kind.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  }
+
+  protected cellCount(kind: WinPatternKind): number {
+    return PATTERN_CELL_COUNTS[kind];
+  }
 
   protected toggle(kind: WinPatternKind): void {
     this.enabledSet.update(s => {

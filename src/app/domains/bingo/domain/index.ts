@@ -8,7 +8,7 @@ export type { GridCell } from './grid-cell.vo';
 export { createGridCell, markCell, setCellWinning, createCellGrid } from './grid-cell.vo';
 export type { GameMode } from './game-mode.type';
 export type { WinPattern, WinPatternKind } from './win-pattern.type';
-export { PATTERN_LABELS, DEFAULT_PATTERN_SETTINGS } from './win-pattern.type';
+export { PATTERN_LABELS, PATTERN_VISUAL_CELLS, PATTERN_DESCRIPTIONS, PATTERN_CELL_COUNTS, DEFAULT_PATTERN_SETTINGS } from './win-pattern.type';
 export type { PatternSettings } from './win-pattern.type';
 export { BingoCard } from './bingo-card.entity';
 export type { CardRepository } from './card-repository.interface';
