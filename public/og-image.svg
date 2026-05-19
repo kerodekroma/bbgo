@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="50%" stop-color="#16213e"/>
+      <stop offset="100%" stop-color="#0f3460"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d32f2f"/>
+      <stop offset="100%" stop-color="#ff5252"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Decorative bingo grid -->
+  <g opacity="0.08" transform="translate(80, 30)">
+    <rect x="0" y="0" width="1040" height="570" rx="8" fill="none" stroke="white" stroke-width="2"/>
+    <line x1="208" y1="0" x2="208" y2="570" stroke="white" stroke-width="1"/>
+    <line x1="416" y1="0" x2="416" y2="570" stroke="white" stroke-width="1"/>
+    <line x1="624" y1="0" x2="624" y2="570" stroke="white" stroke-width="1"/>
+    <line x1="832" y1="0" x2="832" y2="570" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="114" x2="1040" y2="114" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="228" x2="1040" y2="228" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="342" x2="1040" y2="342" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="456" x2="1040" y2="456" stroke="white" stroke-width="1"/>
+  </g>
+
+  <!-- B I N G O letters -->
+  <g opacity="0.15" transform="translate(80, 30)">
+    <text x="104" y="76" font-family="Arial, sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle">B</text>
+    <text x="312" y="76" font-family="Arial, sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle">I</text>
+    <text x="520" y="76" font-family="Arial, sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle">N</text>
+    <text x="728" y="76" font-family="Arial, sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle">G</text>
+    <text x="936" y="76" font-family="Arial, sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle">O</text>
+  </g>
+
+  <!-- Logo section -->
+  <text x="600" y="260" font-family="Arial, sans-serif" font-size="120" font-weight="900" fill="url(#accent)" text-anchor="middle" letter-spacing="8">BBGO</text>
+
+  <text x="600" y="340" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#e0e0e0" text-anchor="middle" letter-spacing="6">BINGO CARD TRACKER</text>
+
+  <!-- Divider -->
+  <rect x="420" y="370" width="360" height="3" rx="1.5" fill="url(#accent)"/>
+
+  <!-- Tagline -->
+  <text x="600" y="420" font-family="Arial, sans-serif" font-size="22" fill="#999" text-anchor="middle" letter-spacing="2">Track multiple cards · OCR import · Win pattern detection</text>
+
+  <!-- Bingo chips decoration -->
+  <circle cx="190" cy="520" r="28" fill="none" stroke="#d32f2f" stroke-width="2" opacity="0.4"/>
+  <circle cx="190" cy="520" r="12" fill="#d32f2f" opacity="0.3"/>
+  <circle cx="380" cy="550" r="28" fill="none" stroke="#ff5252" stroke-width="2" opacity="0.4"/>
+  <circle cx="380" cy="550" r="12" fill="#ff5252" opacity="0.3"/>
+  <circle cx="820" cy="520" r="28" fill="none" stroke="#d32f2f" stroke-width="2" opacity="0.4"/>
+  <circle cx="820" cy="520" r="12" fill="#d32f2f" opacity="0.3"/>
+  <circle cx="1010" cy="550" r="28" fill="none" stroke="#ff5252" stroke-width="2" opacity="0.4"/>
+  <circle cx="1010" cy="550" r="12" fill="#ff5252" opacity="0.3"/>
+</svg>

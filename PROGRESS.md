@@ -131,6 +131,7 @@ src/app/domains/bingo/
 - [x] **Light background** — `#f5f7fa` app background
 - [x] **Responsive design** — mobile-friendly grid and layout
 - [x] **Accessibility** — keyboard navigation, ARIA labels, focus management
+- [x] **Responsive icon fixes** — fixed margins for diskete and cloud icons in responsive mode (save button + drop zone)
 
 ### Persistence & State
 - [x] **localStorage** — cards, called numbers, game mode, settings, active card persisted
@@ -150,6 +151,12 @@ src/app/domains/bingo/
 - [x] **GitHub Actions deploy workflow** — builds + deploys to GitHub Pages on push
 - [x] **SPA routing fallback** — 404.html copies index.html
 - [x] **README.md** — feature overview, tech stack, setup guide, DDD structure
+
+### Social & Branding
+- [x] **Open Graph meta tags** — og:title, description, image, type, site_name for rich social previews
+- [x] **Twitter Cards** — summary_large_image card for Twitter/X sharing
+- [x] **OG preview image** — 1200×630 SVG with bingo grid background and BBGO branding
+- [x] **SVG favicon** — red bingo ball with "B" replacing the generic favicon
 
 ### Quality
 - [x] **55 unit tests** passing (Vitest)
@@ -219,4 +226,4 @@ pnpm ng e2e               # Playwright e2e
 
 ---
 
-*Last updated: 2026-05-16*
+*Last updated: 2026-05-18*

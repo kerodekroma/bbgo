@@ -242,7 +242,7 @@ import { LanguageService } from '../../../../shared/i18n/language.service';
       .grid-cell-input { padding: 6px 2px; font-size: 0.85rem; }
       .free-cell { font-size: 0.65rem; padding: 6px 2px; }
       .drop-zone { padding: 20px 12px; }
-      .upload-icon { font-size: 36px; width: 36px; height: 36px; }
+      .upload-icon { font-size: 36px; width: 36px; height: 36px; margin: 0; }
       .manual-entry { padding: 8px 0; }
     }
   `],

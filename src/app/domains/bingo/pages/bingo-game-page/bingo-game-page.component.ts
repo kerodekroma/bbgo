@@ -209,8 +209,9 @@ interface WinEntry {
     .mobile-menu-btn { display: none; }
     .menu-locale-hint { margin-left: auto; font-size: 0.75rem; color: #999; font-weight: 600; }
     .menu-clear-text { color: #d32f2f; }
-    .save-btn { height: 36px; line-height: 36px; font-size: 0.8rem; border-radius: 18px; padding: 0 12px; }
-    .save-btn-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
+    .save-btn { height: 36px; font-size: 0.8rem; border-radius: 18px; padding: 0 12px; display: flex; align-items: center; justify-content: center; }
+    .save-btn ::ng-deep .mdc-button__label { display: flex; align-items: center; justify-content: center; gap: 4px; }
+    .save-btn-icon { font-size: 16px; width: 16px; height: 16px; line-height: 1; vertical-align: middle; }
     .save-btn-label { display: inline; }
     .clear-btn { color: #999; }
     .clear-btn:hover { color: #d32f2f; }
@@ -253,8 +254,8 @@ interface WinEntry {
       .title-icon { font-size: 24px; width: 24px; height: 24px; }
       .version-badge { font-size: 0.55rem; margin-bottom: 2px; }
       .save-btn-label { display: none; }
-      .save-btn { min-width: 36px; padding: 0 8px; border-radius: 50%; }
-      .save-btn-icon { margin-right: 0; }
+      .save-btn { min-width: 36px; width: 36px; height: 36px; padding: 0; border-radius: 50%; }
+      .save-btn .save-btn-icon { margin: 0; }
       .desktop-buttons { display: none; }
       .mobile-menu-btn { display: inline-flex; }
       .header-actions { gap: 2px; }
