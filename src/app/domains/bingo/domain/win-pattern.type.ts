@@ -89,9 +89,11 @@ export const PATTERN_CELL_COUNTS: Record<WinPatternKind, number> = {
 /** Pattern settings — which patterns are actively checked */
 export interface PatternSettings {
   enabled: WinPatternKind[];
+  /** When true, all enabled patterns must be satisfied to win (effectively full-house). */
+  fulfillAll: boolean;
 }
 
-/** Default: all patterns enabled except multi-line (inferred from 2+ lines) and full-house (special) */
+/** Default: all patterns enabled, fulfill-all off */
 export const DEFAULT_PATTERN_SETTINGS: PatternSettings = {
   enabled: [
     'single-line',
@@ -103,4 +105,5 @@ export const DEFAULT_PATTERN_SETTINGS: PatternSettings = {
     'letter-i',
     'frame',
   ],
+  fulfillAll: false,
 };

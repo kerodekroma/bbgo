@@ -318,6 +318,7 @@ export class CardTabsComponent {
   readonly calledNumbers = input<number[]>([]);
   readonly winResults = input<Map<string, WinPattern[]>>(new Map());
   readonly enabledPatterns = input<WinPatternKind[]>([]);
+  readonly fulfillAll = input(false);
   readonly cardSelected = output<CardId>();
   readonly addCard = output<void>();
   readonly deleteCard = output<CardId>();
@@ -336,9 +337,16 @@ export class CardTabsComponent {
   /**
    * Returns the best pattern progress for a card — picks the enabled pattern
    * with the highest completion percentage. Falls back to overall progress
-   * if no patterns are enabled.
+   * if no patterns are enabled. When Fulfill All is active, shows Full House progress.
    */
   protected getBestProgress(card: BingoCard): { pct: number; label: string } {
+    if (this.fulfillAll()) {
+      // Fulfill All mode: progress toward full house (all 25 cells)
+      const marked = card.grid.filter(c => c.isMarked).length;
+      const pct = Math.round((marked / 25) * 100);
+      return { pct, label: this.t()('pattern.fullHouse') };
+    }
+
     const enabled = this.enabledPatterns();
     if (enabled.length === 0) {
       // Fallback: overall non-free progress
@@ -372,6 +380,12 @@ export class CardTabsComponent {
    * Only highlights when the card has fewer than 100% progress (not yet won).
    */
   protected getHighlightPattern(card: BingoCard): WinPatternKind | null {
+    if (this.fulfillAll()) {
+      // Fulfill All mode: highlight full-house until all 25 cells are marked
+      const marked = card.grid.filter(c => c.isMarked).length;
+      return marked < 25 ? 'full-house' : null;
+    }
+
     const enabled = this.enabledPatterns();
     if (enabled.length === 0) return null;
 

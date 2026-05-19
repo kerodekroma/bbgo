@@ -77,8 +77,10 @@ src/app/domains/bingo/
 
 ### Settings Dialog
 - [x] "Fulfill All" master toggle at top of pattern settings
-  - Enables/disables all patterns at once
-  - Reactive: unchecks when any individual pattern is deselected
+  - Separate flag from individual pattern toggles (not just a shortcut)
+  - When ON: only Full House triggers a win (all 25 cells must be marked)
+  - When OFF: only individually selected patterns trigger wins
+  - Mutually exclusive: enabling Fulfill All clears individual patterns; enabling any pattern disables Fulfill All
 - [x] Full-width single-column pattern card layout
 - [x] Responsive breakpoints (400px, 340px) for mobile
   - Scaled toggles, hidden metadata, compact icons on small screens
@@ -90,6 +92,8 @@ src/app/domains/bingo/
 - [x] FREE cell excluded from all progress calculations
 - [x] Color-coded progress bar matching closeness to completion
 - [x] Fixed pattern name rendering (was showing kebab-case ID instead of translated name)
+- [x] Fulfill All mode: progress tracks Full House (X/25 cells) instead of individual patterns
+- [x] Win detection respects Fulfill All: only full-house wins when Fulfill All is ON; individual patterns only when OFF
 
 ### Number Calling & History
 - [x] **Caller input** — type number, press Enter to call
@@ -226,4 +230,4 @@ pnpm ng e2e               # Playwright e2e
 
 ---
 
-*Last updated: 2026-05-18*
+*Last updated: 2026-05-19*

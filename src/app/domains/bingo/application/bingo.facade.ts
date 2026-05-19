@@ -51,14 +51,26 @@ export class BingoFacade {
 
   /** Win results mapped by card ID — recomputed on every cards change, filtered by enabled patterns */
   readonly winResults = computed<Map<string, WinPattern[]>>(() => {
-    const enabled = new Set<WinPatternKind>(this.patternSettingsSignal().enabled);
+    const settings = this.patternSettingsSignal();
+    const enabled = new Set<WinPatternKind>(settings.enabled);
+    const fulfillAll = settings.fulfillAll;
     const results = new Map<string, WinPattern[]>();
     for (const card of this.cardsSignal()) {
-      let patterns = card.getWinPatterns();
-      // Only include enabled patterns (multi-line and full-house are always shown if present)
-      patterns = patterns.filter(p => p.kind === 'multi-line' || p.kind === 'full-house' || enabled.has(p.kind as WinPatternKind));
-      if (patterns.length > 0) {
-        results.set(card.id, patterns);
+      const patterns = card.getWinPatterns();
+      if (fulfillAll) {
+        // Fulfill All mode: only full-house triggers a win (all patterns satisfied = all cells marked)
+        const fullHouse = patterns.find(p => p.kind === 'full-house');
+        if (fullHouse) {
+          results.set(card.id, [fullHouse]);
+        }
+      } else {
+        // Normal mode: filter by enabled patterns (multi-line always shown since it's inferred)
+        const matched = patterns.filter(p =>
+          p.kind === 'multi-line' || enabled.has(p.kind as WinPatternKind),
+        );
+        if (matched.length > 0) {
+          results.set(card.id, matched);
+        }
       }
     }
     return results;
@@ -95,6 +107,7 @@ export class BingoFacade {
         if (state.patternSettings?.enabled) {
           this.patternSettingsSignal.set({
             enabled: state.patternSettings.enabled as WinPatternKind[],
+            fulfillAll: state.patternSettings.fulfillAll ?? false,
           });
         }
       }
@@ -350,7 +363,7 @@ export class BingoFacade {
     this.gameStateService.saveState({
       calledNumbers: numbers,
       gameMode: mode,
-      patternSettings: { enabled: settings.enabled },
+      patternSettings: { enabled: settings.enabled, fulfillAll: settings.fulfillAll },
     });
   }
 

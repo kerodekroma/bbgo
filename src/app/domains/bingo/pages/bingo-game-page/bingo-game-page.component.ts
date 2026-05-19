@@ -180,6 +180,7 @@ interface WinEntry {
           [calledNumbers]="facade.calledNumbers()"
           [winResults]="facade.winResults()"
           [enabledPatterns]="facade.patternSettings().enabled"
+          [fulfillAll]="facade.patternSettings().fulfillAll"
           (cardSelected)="onCardSelected($event)"
           (addCard)="onAddCard()"
           (deleteCard)="onDeleteCard($event)"

@@ -345,10 +345,9 @@ export class SettingsDialogComponent {
     new Set(this.facade.patternSettings().enabled),
   );
 
-  /** True when ALL toggleable patterns are enabled — drives the "Fulfill All" toggle state */
+  /** Fulfill All flag — a separate toggle that makes only full-house count as a win */
   protected readonly isFulfillAll = computed(() => {
-    const enabled = this.enabledSet();
-    return TOGGLEABLE_PATTERNS.every(kind => enabled.has(kind));
+    return this.facade.patternSettings().fulfillAll;
   });
 
   protected kindKey(kind: WinPatternKind): string {
@@ -360,33 +359,53 @@ export class SettingsDialogComponent {
     return PATTERN_CELL_COUNTS[kind];
   }
 
-  /** Toggle the "Fulfill All" master switch */
+  /** Toggle the "Fulfill All" master switch — enables full-house-only win mode */
   protected toggleFulfillAll(): void {
-    if (this.isFulfillAll()) {
-      // Currently all enabled → disable all
+    const nextFulfillAll = !this.isFulfillAll();
+    if (nextFulfillAll) {
+      // Turning Fulfill All ON → clear all individual patterns
       this.enabledSet.set(new Set());
-    } else {
-      // Not all enabled → enable all
-      this.enabledSet.set(new Set(TOGGLEABLE_PATTERNS));
     }
     this.facade.setPatternSettings({
       enabled: [...this.enabledSet()],
+      fulfillAll: nextFulfillAll,
     });
   }
 
   protected toggle(kind: WinPatternKind): void {
-    this.enabledSet.update(s => {
-      const next = new Set(s);
-      if (next.has(kind)) {
+    const isCurrentlyEnabled = this.enabledSet().has(kind);
+
+    if (isCurrentlyEnabled) {
+      // Turning a pattern OFF
+      this.enabledSet.update(s => {
+        const next = new Set(s);
         next.delete(kind);
+        return next;
+      });
+      this.facade.setPatternSettings({
+        enabled: [...this.enabledSet()],
+        fulfillAll: this.isFulfillAll(),
+      });
+    } else {
+      // Turning a pattern ON → disable Fulfill All
+      if (this.isFulfillAll()) {
+        this.enabledSet.set(new Set([kind]));
+        this.facade.setPatternSettings({
+          enabled: [kind],
+          fulfillAll: false,
+        });
       } else {
-        next.add(kind);
+        this.enabledSet.update(s => {
+          const next = new Set(s);
+          next.add(kind);
+          return next;
+        });
+        this.facade.setPatternSettings({
+          enabled: [...this.enabledSet()],
+          fulfillAll: false,
+        });
       }
-      return next;
-    });
-    this.facade.setPatternSettings({
-      enabled: [...this.enabledSet()],
-    });
+    }
   }
 
   protected resetToDefaults(): void {

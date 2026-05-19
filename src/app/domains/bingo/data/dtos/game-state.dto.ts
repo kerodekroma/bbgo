@@ -3,5 +3,6 @@ export interface GameStateDto {
   gameMode: string;
   patternSettings?: {
     enabled: string[];
+    fulfillAll?: boolean;
   };
 }
